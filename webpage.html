@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Booking - Login</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        .login-container h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .options {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .options a {
+            margin: 0 10px;
+            text-decoration: none;
+            color: #007bff;
+            cursor: pointer;
+        }
+        .options a:hover {
+            text-decoration: underline;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .form-group button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .form-group button:hover {
+            background-color: #0056b3;
+        }
+        #password-form {
+            display: none; /* Initially hidden */
+            margin-top: 20px;
+        }
+        #options-container { /* Added an ID to the options div */
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Login</h2>
+        <div id="options-container" class="options">
+            <a href="#" id="customer-login">Customer</a> |
+            <a href="#" id="employee-login">Employee</a> |
+            <a href="#" id="create-account">Create Customer Account</a>
+        </div>
+        <form id="password-form">
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <button type="submit">Login</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const customerLogin = document.getElementById('customer-login');
+        const employeeLogin = document.getElementById('employee-login');
+        const createAccount = document.getElementById('create-account');
+        const passwordForm = document.getElementById('password-form');
+        const optionsContainer = document.getElementById('options-container'); // Get the options container
+
+        let userType = null;
+
+        function handleOptionClick(event, type) {
+            event.preventDefault();
+            userType = type;
+            optionsContainer.style.display = 'none'; // Hide the options
+            passwordForm.style.display = 'block'; // Show password input
+        }
+
+        customerLogin.addEventListener('click', (event) => handleOptionClick(event, 'customer'));
+        employeeLogin.addEventListener('click', (event) => handleOptionClick(event, 'employee'));
+        createAccount.addEventListener('click', (event) => handleOptionClick(event, 'create-account'));
+
+        passwordForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            //  Here, you would typically send the password and
+            //  the 'userType' to the server.
+            alert(`Action: ${userType} - Password submitted (functionality not implemented).`);
+        });
+    </script>
+</body>
+</html>
