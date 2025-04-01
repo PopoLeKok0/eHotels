@@ -1,0 +1,187 @@
+# e-Hotels Project - Technology and Implementation Plan
+
+## Project Information
+- Course: CSI 2132A – Databases I (Winter 2025)
+- University of Ottawa
+- Building on Deliverable 1 by: Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+
+## Technology Stack
+
+### Database
+- MySQL 8.0+
+  - Robust referential integrity with InnoDB
+  - Comprehensive trigger and stored procedure support
+  - Excellent performance for transactional operations
+
+### Web Server
+- Apache 2.4+ with Tomcat
+  - Industry standard for PHP applications
+  - Handles client-server communication as specified in requirements
+
+### Backend
+- PHP 8.0+
+  - Strong MySQL integration via PDO
+  - Simple implementation for database operations
+  - Rapid development cycle
+
+### Frontend
+- HTML5
+- CSS3 with Bootstrap 5
+- JavaScript (vanilla + jQuery)
+  - For dynamic filtering and form validation
+  - Real-time room availability updates
+
+## Detailed Implementation Steps
+
+### Phase 1: Database Setup and Structure (2a)
+1. Create `database_schema.sql` file with:
+   - CREATE DATABASE statement
+   - All table creation statements based on Deliverable 1 schema
+   - Primary key constraints
+   - Foreign key constraints
+   - CHECK constraints for data validation
+   - Default values where appropriate
+
+2. Create `database_triggers.sql` file with:
+   - Trigger for booking date validation
+   - Trigger for manager employment validation
+   - Trigger for archiving bookings/rentings
+   - Trigger for updating hotel counts in chains
+
+3. Execute the schema script in MySQL to create database structure
+
+### Phase 2: Database Population (2b)
+4. Create `database_population.sql` file with:
+   - INSERT statements for 5 hotel chains (with unique names and addresses)
+   - INSERT statements for chain contact info (phone numbers and emails)
+   - INSERT statements for 8+ hotels per chain (across 3+ categories)
+   - INSERT statements for hotel contact info
+   - INSERT statements for employees (including managers)
+   - INSERT statements for 5+ rooms per hotel (varying capacities)
+   - INSERT statements for sample customers
+   - INSERT statements for sample bookings and rentings
+
+5. Execute the population script to load test data
+
+### Phase 3: Database Queries and Operations (2c, 2d, 2e, 2f)
+6. Create `database_queries.sql` file with:
+   - Query 1: Room availability by multiple criteria (location, dates, price)
+   - Query 2: Aggregation query for booking statistics
+   - Query 3: Nested query for customer booking history
+   - Query 4: Hotel chain performance analysis
+
+7. Create `database_indexes.sql` file with:
+   - Index 1: Room availability search optimization
+     - CREATE INDEX statement with justification comment
+   - Index 2: Location-based hotel search optimization
+     - CREATE INDEX statement with justification comment
+   - Index 3: Customer/employee lookup optimization
+     - CREATE INDEX statement with justification comment
+
+8. Create `database_views.sql` file with:
+   - View 1: Available rooms per area
+   - View 2: Aggregated capacity of rooms per hotel
+   - Additional views as needed
+
+9. Execute all SQL files to implement queries, indexes, and views
+
+### Phase 4: Application Structure Setup
+10. Create project directory structure:
+    ```
+    /eHotels
+      /css
+      /js
+      /images
+      /includes
+      /pages
+      /config
+    ```
+
+11. Create `config/database.php` for database connection:
+    - MySQL connection parameters
+    - PDO error handling
+
+12. Create basic include files:
+    - `includes/header.php`
+    - `includes/footer.php`
+    - `includes/functions.php`
+    - `includes/session.php`
+
+### Phase 5: Core Backend Implementation
+13. Create `includes/user_auth.php` with:
+    - Login functions (customer and employee)
+    - Registration functions
+    - Session management
+
+14. Create database interaction classes/files:
+    - `includes/hotel_operations.php` (hotel chain & hotel data operations)
+    - `includes/room_operations.php` (room data & availability)
+    - `includes/booking_operations.php` (booking & renting logic)
+    - `includes/customer_operations.php` (customer data management)
+    - `includes/employee_operations.php` (employee operations)
+
+### Phase 6: User Interface - Customer Features
+15. Create customer pages:
+    - `index.php` (homepage with search)
+    - `login.php` and `register.php`
+    - `search_rooms.php` (with all required filtering criteria)
+    - `booking.php` (booking process)
+    - `my_bookings.php` (view/manage bookings)
+    - `profile.php` (customer profile management)
+
+16. Style pages with Bootstrap and custom CSS:
+    - Create `css/styles.css`
+    - Implement responsive design
+
+17. Implement JavaScript functionality:
+    - Create `js/search.js` for dynamic filtering
+    - Create `js/validation.js` for form validation
+
+### Phase 7: User Interface - Employee Features
+18. Create employee pages:
+    - `employee/index.php` (dashboard)
+    - `employee/check_in.php` (booking to renting)
+    - `employee/direct_rental.php` (direct renting)
+    - `employee/manage_customers.php` (customer management)
+    - `employee/manage_rooms.php` (room management)
+    - `employee/reports.php` (view database views)
+
+19. Implement JavaScript for employee features:
+    - `js/employee_dashboard.js`
+    - `js/check_in_process.js`
+
+### Phase 8: Integration and Testing
+20. Integrate database views into the UI:
+    - Show "Available rooms per area" in search results
+    - Display "Aggregated capacity" in hotel details
+
+21. Test all functionality:
+    - Customer registration and login
+    - Room searching with all criteria
+    - Booking process
+    - Employee check-in and direct rental
+    - Data management operations
+
+22. Fix any bugs and optimize performance
+
+### Phase 9: Documentation and Final Delivery
+23. Create installation guide:
+    - Required software
+    - Database setup instructions
+    - Web server configuration
+
+24. Prepare source code package:
+    - All PHP, HTML, CSS, JS files
+    - SQL scripts (schema, population, queries, etc.)
+
+25. Record demonstration video:
+    - Show all implemented features
+    - Demonstrate database operations
+    - Complete requirements checklist
+
+## Deliverables
+1. Complete source code package
+2. SQL scripts for database setup
+3. Installation documentation
+4. Video demonstration
+5. Completed requirements table
