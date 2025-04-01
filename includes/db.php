@@ -1,7 +1,7 @@
 <?php
 /**
- * e-Hotels Database Connection
- * Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+ * Database Connection Configuration (Legacy? See config/database.php)
+ * Based on Deliverable 1 by Mouad Ben lahbib (300259705)
  */
 
 // Database configuration

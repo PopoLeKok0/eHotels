@@ -1,5 +1,8 @@
 -- e-Hotels Database Schema for MySQL
--- Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+-- Based on Deliverable 1 by Mouad Ben lahbib (300259705)
+
+-- This file contains the schema definition for MySQL compatibility if needed.
+-- The primary schema used for development is likely in database_schema.sql or similar.
 
 -- Use the database
 USE ehotels;

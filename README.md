@@ -1,6 +1,6 @@
 # e-Hotels Application
 
-A web-based hotel booking system based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463).
+A web-based hotel booking system based on Deliverable 1 by Mouad Ben lahbib (300259705).
 
 ## Features
 
@@ -86,4 +86,12 @@ A web-based hotel booking system based on Deliverable 1 by Mouad Ben lahbib (300
 
 ## Credits
 
-This application is based on a database design project by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463). 
+This application is based on a database design project by Mouad Ben lahbib (300259705). 
+
+## Contributors
+- Mouad Ben lahbib (300259705)
+
+## Disclaimer
+This application is based on a database design project by Mouad Ben lahbib (300259705).
+
+## License 

@@ -1,5 +1,8 @@
 -- e-Hotels Database Population
--- Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+-- Based on Deliverable 1 by Mouad Ben lahbib (300259705)
+
+-- Connect to the database
+\c ehotels
 
 -- 1. Insert Hotel Chains (5 required)
 INSERT INTO Hotel_Chain (Chain_Name, Central_Office_Address) VALUES

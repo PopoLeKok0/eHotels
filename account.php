@@ -1,8 +1,10 @@
 <?php
 /**
- * e-Hotels User Account Management
- * Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+ * e-Hotels Account Management (Placeholder)
+ * Based on Deliverable 1 by Mouad Ben lahbib (300259705)
  */
+
+// Start session if not already started
 
 // Include database connection and header
 require_once 'includes/db.php';

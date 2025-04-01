@@ -1,7 +1,7 @@
 <?php
 /**
  * e-Hotels Room Booking Page
- * Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+ * Based on Deliverable 1 by Mouad Ben lahbib (300259705)
  */
 
 // Start output buffering

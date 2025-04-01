@@ -1,7 +1,7 @@
 <?php
 /**
- * e-Hotels Database Connection Configuration
- * Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+ * e-Hotels Database Connection Singleton
+ * Based on Deliverable 1 by Mouad Ben lahbib (300259705)
  * 
  * This file handles the database connection and provides utility functions
  * for working with the database.

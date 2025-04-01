@@ -1,5 +1,8 @@
 -- e-Hotels Database Schema
--- Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+-- Based on Deliverable 1 by Mouad Ben lahbib (300259705)
+
+-- Create the database
+CREATE DATABASE IF NOT EXISTS ehotels;
 
 -- Drop tables if they exist (for schema reset)
 DROP TABLE IF EXISTS Booking;

@@ -1,8 +1,10 @@
 <?php
 /**
- * e-Hotels Room Search
- * Based on Deliverable 1 by Mouad Ben lahbib (300259705) and Xinyuan Zhou (300233463)
+ * e-Hotels Room Search Page
+ * Based on Deliverable 1 by Mouad Ben lahbib (300259705)
  */
+
+// Start session if not already started
 
 // Include database connection
 require_once 'config/database.php';
