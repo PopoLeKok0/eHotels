@@ -146,6 +146,7 @@ INSERT INTO Hotel (Hotel_Address, Chain_Name, Star_Rating, Manager_SSN, Area) VA
 ('155 Wellington Street West, Toronto, ON M5V 3J7', 'AccorHotels', 5, '456789012', 'Toronto'),
 ('550 Wellington Street West, Toronto, ON M5V 2V4', 'AccorHotels', 4, '456789013', 'Toronto'),
 ('900 Burrard Street, Vancouver, BC V6Z 3G2', 'AccorHotels', 3, '456789014', 'Vancouver'),
+('1 Place du Canada, Montreal, QC H3B 4C9', 'AccorHotels', 4, '456789015', 'Montreal'),
 ('11 Colonel By Drive, Ottawa, ON K1N 9H4', 'AccorHotels', 4, '456789016', 'Ottawa'),
 ('10115 104 Street NW, Edmonton, AB T5J 1A7', 'AccorHotels', 3, '456789017', 'Edmonton'),
 ('8440 Highway 27, Woodbridge, ON L4L 1A5', 'AccorHotels', 3, '456789018', 'Woodbridge'),
@@ -157,10 +158,10 @@ INSERT INTO Hotel (Hotel_Address, Chain_Name, Star_Rating, Manager_SSN, Area) VA
 ('335 Queen Street West, Toronto, ON M5V 2A1', 'Wyndham Hotels & Resorts', 4, '567890124', 'Toronto'),
 ('1050 Granville Street, Vancouver, BC V6Z 1L5', 'Wyndham Hotels & Resorts', 3, '567890125', 'Vancouver'),
 ('1180 Phillips Square, Montreal, QC H3B 3C8', 'Wyndham Hotels & Resorts', 4, '567890126', 'Montreal'),
+('900 Rue de la Gauchetiere Ouest, Montreal, QC H5A 1E4', 'Wyndham Hotels & Resorts', 5, '567890131', 'Montreal'),
 ('100 Kent Street, Ottawa, ON K1P 5R7', 'Wyndham Hotels & Resorts', 3, '567890127', 'Ottawa'),
 ('10011 109 Street NW, Edmonton, AB T5J 3S8', 'Wyndham Hotels & Resorts', 4, '567890128', 'Edmonton'),
-('1230 16th Avenue NW, Calgary, AB T2M 0L8', 'Wyndham Hotels & Resorts', 3, '567890129', 'Calgary'),
-('379 Queen Street South, Kitchener, ON N2G 1W6', 'Wyndham Hotels & Resorts', 3, '567890130', 'Kitchener');
+('1230 16th Avenue NW, Calgary, AB T2M 0L8', 'Wyndham Hotels & Resorts', 3, '567890129', 'Calgary');
 
 -- 6. Hotel Phones and Emails
 -- Marriott Phones and Emails (Sample)

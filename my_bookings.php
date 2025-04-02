@@ -26,6 +26,8 @@ if (!$isCustomer) {
 // Get logged-in customer details
 $customer_id = $_SESSION['user_id'];
 $customer_name = $_SESSION['customer_name'] ?? 'Customer';
+$customer_email = '';
+$customer_address = '';
 
 // Initialize variables
 $bookings = [];
@@ -51,6 +53,16 @@ try {
     $dbInstance = getDatabase();
     $db = $dbInstance->getConnection();
 
+    // Fetch Customer Details first
+    $cust_stmt = $db->prepare("SELECT Full_Name, Address, Email_Address FROM Customer WHERE Customer_ID = ?");
+    $cust_stmt->execute([$customer_id]);
+    $customer_data = $cust_stmt->fetch(PDO::FETCH_ASSOC);
+    if ($customer_data) {
+        $customer_name = $customer_data['Full_Name'];
+        $customer_address = $customer_data['Address'];
+        $customer_email = $customer_data['Email_Address'];
+    }
+    
     // Fetch bookings for the current customer
     // Join Booking with Reserved_By, Room, and Hotel to get details
     $stmt = $db->prepare("
@@ -69,11 +81,10 @@ try {
         JOIN Reserved_By rb ON b.Booking_ID = rb.Booking_ID
         JOIN Room r ON rb.Hotel_Address = r.Hotel_Address AND rb.Room_Num = r.Room_Num
         JOIN Hotel h ON r.Hotel_Address = h.Hotel_Address
-        WHERE b.Customer_ID = :customer_id
+        WHERE b.Customer_ID = ? 
         ORDER BY b.Start_Date DESC, b.Creation_Date DESC 
     ");
-    $stmt->bindParam(':customer_id', $customer_id);
-    $stmt->execute();
+    $stmt->execute([$customer_id]);
     
     $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -93,6 +104,18 @@ try {
     <h1 class="mb-4">My Bookings</h1>
     
     <p>Welcome back, <?= htmlspecialchars($customer_name) ?>! Here are your current and past bookings.</p>
+
+    <!-- Optional: Display customer details -->
+    <div class="card mb-4">
+        <div class="card-header">
+            Your Information
+        </div>
+        <div class="card-body">
+            <p class="mb-1"><strong>Name:</strong> <?= htmlspecialchars($customer_name) ?></p>
+            <p class="mb-1"><strong>Email:</strong> <?= htmlspecialchars($customer_email) ?></p>
+            <p class="mb-0"><strong>Address:</strong> <?= htmlspecialchars($customer_address) ?></p>
+        </div>
+    </div>
 
     <?php if (!empty($message)): ?>
         <div class="alert alert-<?= htmlspecialchars($messageType); ?> alert-dismissible fade show" role="alert">

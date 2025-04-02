@@ -56,7 +56,7 @@ CREATE TABLE Hotel (
     Manager_SSN CHAR(9) NOT NULL,
     Num_Rooms INTEGER NOT NULL DEFAULT 0,
     Area VARCHAR(50) NOT NULL, -- Added for area-based searches
-    FOREIGN KEY (Chain_Name) REFERENCES Hotel_Chain(Chain_Name) ON DELETE CASCADE,
+    FOREIGN KEY (Chain_Name) REFERENCES Hotel_Chain(Chain_Name) ON DELETE RESTRICT,
     FOREIGN KEY (Manager_SSN) REFERENCES Employee(SSN) ON DELETE RESTRICT,
     CONSTRAINT check_star_rating CHECK (Star_Rating BETWEEN 1 AND 5),
     CONSTRAINT check_num_rooms CHECK (Num_Rooms >= 0)
@@ -108,7 +108,7 @@ CREATE TABLE Room (
     Availability BOOLEAN NOT NULL DEFAULT TRUE,
     Damages TEXT,
     PRIMARY KEY (Hotel_Address, Room_Num),
-    FOREIGN KEY (Hotel_Address) REFERENCES Hotel(Hotel_Address) ON DELETE CASCADE,
+    FOREIGN KEY (Hotel_Address) REFERENCES Hotel(Hotel_Address) ON DELETE RESTRICT,
     CONSTRAINT check_room_num CHECK (Room_Num > 0),
     CONSTRAINT check_capacity CHECK (Capacity BETWEEN 1 AND 10),
     CONSTRAINT check_price CHECK (Price > 0)

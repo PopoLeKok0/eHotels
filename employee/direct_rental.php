@@ -17,28 +17,51 @@ require_once '../config/database.php';
 require_once '../includes/header.php'; 
 
 $employee_id = $_SESSION['user_id'];
-$message = '';
-$messageType = '';
+$message = $_SESSION['rental_message'] ?? null;
+$messageType = $_SESSION['rental_message_type'] ?? '';
 
-// Search parameters
-$start_date = $_POST['start_date'] ?? date('Y-m-d'); // Default today
-$end_date = $_POST['end_date'] ?? date('Y-m-d', strtotime('+1 day')); // Default tomorrow
-$capacity = $_POST['capacity'] ?? 0;
-$area = $_POST['area'] ?? '';
-$hotel_address = $_POST['hotel_address'] ?? ''; // Specific hotel if known
+// Clear session messages after reading
+if (isset($_SESSION['rental_message'])) {
+    unset($_SESSION['rental_message']);
+    unset($_SESSION['rental_message_type']);
+}
+
+// Search parameters (Using GET for persistence across steps)
+$start_date = $_GET['start_date'] ?? date('Y-m-d');
+$end_date = $_GET['end_date'] ?? date('Y-m-d', strtotime('+1 day'));
+$capacity = $_GET['capacity'] ?? 0;
+$area = $_GET['area'] ?? '';
+$chain = $_GET['chain'] ?? ''; // Added chain filter
+$min_price = $_GET['min_price'] ?? null;
+$max_price = $_GET['max_price'] ?? null;
+$action = $_GET['action'] ?? 'search_rooms'; // Control flow: search_rooms, search_customer, confirm
 
 $available_rooms = [];
-$selected_room = null;
-$customer_details = null; // To hold details if existing customer found
+$selected_room = null; // Will hold details of room chosen for rental
+$customer_to_rent = null; // Will hold details of customer chosen/entered
+
+// Customer search/details from later steps
+$customer_search_term = $_GET['customer_search_term'] ?? '';
 
 $dbInstance = getDatabase();
 $db = $dbInstance->getConnection();
 
-// --- Handle Room Search ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['search_rooms'])) {
-    // Basic availability query (similar to main search but simpler for employee)
+// Fetch filter options
+$areas = [];
+$chains_list = [];
+try {
+    $areas = $db->query("SELECT DISTINCT Area FROM Hotel ORDER BY Area")->fetchAll(PDO::FETCH_COLUMN);
+    $chains_list = $db->query("SELECT DISTINCT Chain_Name FROM Hotel_Chain ORDER BY Chain_Name")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {
+    $message = "Error loading filter options: " . $e->getMessage();
+    $messageType = 'danger';
+}
+
+// --- State 1: Search for Available Rooms ---
+if ($action === 'search_rooms' || isset($_GET['search_rooms_submit'])) {
     try {
-        $query = "
+        // Build the query dynamically based on filters
+        $sql = "
             SELECT 
                 h.Hotel_Address, h.Chain_Name, h.Area,
                 r.Room_Num, r.Capacity, r.Price, r.View_Type, r.Amenities
@@ -47,215 +70,192 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['search_rooms'])) {
             WHERE r.Availability = TRUE
         ";
         $params = [];
-        
-        // Add filters
-        if ($capacity > 0) {
-            $query .= " AND r.Capacity >= :capacity";
-            $params[':capacity'] = $capacity;
-        }
-        if (!empty($area)) {
-            $query .= " AND h.Area = :area";
-            $params[':area'] = $area;
-        }
-         if (!empty($hotel_address)) {
-            $query .= " AND h.Hotel_Address = :hotel_address";
-            $params[':hotel_address'] = $hotel_address;
-        }
-        
-        // Date availability check
-        $query .= " AND NOT EXISTS (
+
+        if ($capacity > 0) { $sql .= " AND r.Capacity >= ?"; $params[] = $capacity; }
+        if (!empty($area)) { $sql .= " AND h.Area = ?"; $params[] = $area; }
+        if (!empty($chain)) { $sql .= " AND h.Chain_Name = ?"; $params[] = $chain; }
+        if (is_numeric($min_price)) { $sql .= " AND r.Price >= ?"; $params[] = (float)$min_price; }
+        if (is_numeric($max_price)) { $sql .= " AND r.Price <= ?"; $params[] = (float)$max_price; }
+
+        // Date availability check using NOT EXISTS
+        $sql .= " AND NOT EXISTS (
             SELECT 1 FROM Booking b JOIN Reserved_By rb ON b.Booking_ID = rb.Booking_ID
             WHERE rb.Hotel_Address = r.Hotel_Address AND rb.Room_Num = r.Room_Num
-              AND (b.Start_Date < :end_date1 AND b.End_Date > :start_date1)
+              AND (b.Start_Date < ? AND b.End_Date > ?)
         )";
-        $query .= " AND NOT EXISTS (
-            SELECT 1 FROM Renting rnt JOIN Rented_By rntb ON rnt.Renting_ID = rntb.Renting_ID
-            WHERE rntb.Hotel_Address = r.Hotel_Address AND rntb.Room_Num = r.Room_Num
-              AND (rnt.Start_Date < :end_date2 AND rnt.End_Date > :start_date2)
-        )";
-        $params[':start_date1'] = $start_date;
-        $params[':end_date1'] = $end_date;
-        $params[':start_date2'] = $start_date;
-        $params[':end_date2'] = $end_date;
-
-        $query .= " ORDER BY h.Area, h.Hotel_Address, r.Room_Num LIMIT 50"; // Limit results
+        $params[] = $end_date;
+        $params[] = $start_date;
         
-        $stmt = $db->prepare($query);
+        $sql .= " AND NOT EXISTS (
+            SELECT 1 FROM Renting rent JOIN Rented_By rntb ON rent.Renting_ID = rntb.Renting_ID
+            WHERE rntb.Hotel_Address = r.Hotel_Address AND rntb.Room_Num = r.Room_Num
+              AND (rent.Start_Date < ? AND rent.End_Date > ?)
+        )";
+        $params[] = $end_date;
+        $params[] = $start_date;
+
+        $sql .= " ORDER BY h.Area, h.Hotel_Address, r.Room_Num LIMIT 100";
+        
+        $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $available_rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if (empty($available_rooms)) {
-            $message = "No available rooms found matching the criteria.";
+        if (empty($available_rooms) && isset($_GET['search_rooms_submit'])) {
+            $message = "No available rooms found matching the criteria for the selected dates.";
             $messageType = 'warning';
         }
 
     } catch (Exception $e) {
         error_log("Direct rental room search error: " . $e->getMessage());
-        $message = "Error searching for available rooms.";
+        $message = "Error searching for available rooms: " . $e->getMessage();
         $messageType = 'danger';
     }
 }
 
-// --- Handle Room Selection ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['select_room'])) {
-    $selected_hotel_address = $_POST['selected_hotel_address'] ?? null;
-    $selected_room_num = $_POST['selected_room_num'] ?? null;
-    // Keep dates from the form
-    $start_date = $_POST['start_date'] ?? date('Y-m-d'); 
-    $end_date = $_POST['end_date'] ?? date('Y-m-d', strtotime('+1 day')); 
-
-    if ($selected_hotel_address && $selected_room_num) {
-        try {
-            $stmt = $db->prepare("SELECT r.*, h.Chain_Name, h.Area FROM Room r JOIN Hotel h ON r.Hotel_Address=h.Hotel_Address WHERE r.Hotel_Address = :addr AND r.Room_Num = :num");
-            $stmt->bindParam(':addr', $selected_hotel_address);
-            $stmt->bindParam(':num', $selected_room_num, PDO::PARAM_INT);
-            $stmt->execute();
-            $selected_room = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$selected_room) { 
-                 $message = "Selected room details could not be found."; 
-                 $messageType='danger'; 
-            } else {
-                 // Keep dates associated with the selection
-                 $selected_room['start_date'] = $start_date;
-                 $selected_room['end_date'] = $end_date;
-            }
-        } catch (Exception $e) {
-            error_log("Direct rental room selection error: " . $e->getMessage());
-            $message = "Error fetching selected room details.";
-            $messageType = 'danger';
+// --- State 2: Customer Search/Entry (After a room is selected) ---
+if ($action === 'search_customer' && isset($_GET['hotel_addr']) && isset($_GET['room_num'])) {
+    // Fetch selected room details to pass along
+    try {
+        $stmt = $db->prepare("SELECT r.*, h.Chain_Name, h.Area FROM Room r JOIN Hotel h ON r.Hotel_Address=h.Hotel_Address WHERE r.Hotel_Address = ? AND r.Room_Num = ?");
+        $stmt->execute([$_GET['hotel_addr'], $_GET['room_num']]);
+        $selected_room = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$selected_room) { 
+             throw new Exception("Selected room details could not be found.");
         }
+        // Keep dates associated with the selection
+        $selected_room['start_date'] = $start_date;
+        $selected_room['end_date'] = $end_date;
+    } catch (Exception $e) {
+        error_log("Direct rental room selection error: " . $e->getMessage());
+        $message = "Error fetching selected room details: " . $e->getMessage();
+        $messageType = 'danger';
+        $action = 'search_rooms'; // Go back to room search
     }
-}
-
-// --- Handle Customer Search/Selection ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['search_customer'])) {
-    $customer_search_term = $_POST['customer_search_term'] ?? '';
-    $selected_room = json_decode($_POST['selected_room_details'] ?? '[]', true); // Get room details back
     
-    if (!empty($customer_search_term) && !empty($selected_room)) {
-         try {
-            $stmt = $db->prepare("SELECT Customer_ID, Full_Name, Email_Address, Address FROM Customer WHERE Full_Name LIKE :term OR Email_Address LIKE :term LIMIT 1");
+    // If customer search term submitted, find customer
+    if (!empty($customer_search_term)) {
+        try {
+            $stmt_cust = $db->prepare("SELECT Customer_ID, Full_Name, Email_Address, Address FROM Customer WHERE Full_Name LIKE ? OR Email_Address LIKE ? OR Customer_ID = ? LIMIT 1");
             $like_term = '%' . $customer_search_term . '%';
-            $stmt->bindParam(':term', $like_term);
-            $stmt->execute();
-            $customer_details = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$customer_details) {
-                 $message = "No existing customer found matching '" . htmlspecialchars($customer_search_term) . "'. Please enter details manually.";
+            $stmt_cust->execute([$like_term, $like_term, $customer_search_term]);
+            $customer_to_rent = $stmt_cust->fetch(PDO::FETCH_ASSOC);
+            if (!$customer_to_rent) {
+                 $message = "No existing customer found matching '" . htmlspecialchars($customer_search_term) . "'. Please enter details manually below.";
                  $messageType = 'info';
+            } else {
+                 $message = "Found existing customer: " . htmlspecialchars($customer_to_rent['Full_Name']) . ". Verify details.";
+                 $messageType = 'success';
             }
          } catch (Exception $e) {
              error_log("Direct rental customer search error: " . $e->getMessage());
-             $message = "Error searching for customer.";
+             $message = "Error searching for customer: " . $e->getMessage();
              $messageType = 'danger';
          }
-    } elseif (empty($selected_room)) {
-        $message = "Room selection lost. Please search for a room again.";
-        $messageType = 'danger';
-        $selected_room = null; // Reset room selection
     }
 }
 
-// --- Handle FINAL Direct Rental Confirmation ---
+// --- State 3: Handle FINAL Direct Rental Confirmation (POST request) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_direct_rental'])) {
-    $selected_room = json_decode($_POST['selected_room_details'] ?? '[]', true);
-    $customer_id = $_POST['customer_id'] ?? null; // Existing customer ID
-    $customer_name = $_POST['customer_name'] ?? '';
-    $customer_email = $_POST['customer_email'] ?? '';
-    $customer_address = $_POST['customer_address'] ?? '';
-    $customer_id_type = $_POST['customer_id_type'] ?? 'Passport'; // Default ID type
+    // Get submitted data
+    $room_data = json_decode($_POST['selected_room_details'] ?? '[]', true);
+    $customer_id = $_POST['customer_id'] ?? null; // Existing or newly generated
+    $customer_name = trim($_POST['customer_name'] ?? '');
+    $customer_email = trim($_POST['customer_email'] ?? '');
+    $customer_address = trim($_POST['customer_address'] ?? '');
+    // We need a unique identifier for new customers - SSN/SIN/ID from registration is best
+    // For direct rental, let's assume Customer_ID is the primary key (SSN/SIN)
+    $customer_new_id = trim($_POST['customer_new_id'] ?? ''); // Get the ID field
+    $payment_amount = filter_input(INPUT_POST, 'payment_amount', FILTER_VALIDATE_FLOAT);
 
-    if (!empty($selected_room) && (!empty($customer_id) || (!empty($customer_name) && !empty($customer_email) && !empty($customer_address)))){
+    // Basic validation
+    if (empty($room_data)) {
+        $message = "Room details missing. Please start again."; $messageType = 'danger'; $action = 'search_rooms';
+    } elseif (empty($customer_id) && (empty($customer_new_id) || empty($customer_name) || empty($customer_address))) {
+        $message = "Customer ID (SSN/SIN) and Name/Address required for new customer."; $messageType = 'danger'; $action = 'search_customer';
+    } elseif ($payment_amount === false || $payment_amount < 0) {
+         $message = "Invalid payment amount entered."; $messageType = 'danger'; $action = 'search_customer';
+    } else {
         $db->beginTransaction();
         try {
-            // A. Get/Create Customer ID
-            if (empty($customer_id)) { // Create new customer
-                $customer_id = uniqid('cust-', true);
-                $stmt_new_cust = $db->prepare("INSERT INTO Customer (Customer_ID, Full_Name, Address, Email_Address, ID_Type, Date_of_Registration) VALUES (:id, :name, :addr, :email, :id_type, CURDATE())");
-                // NOTE: Needs Password_Hash if registering properly
-                $stmt_new_cust->bindParam(':id', $customer_id);
-                $stmt_new_cust->bindParam(':name', $customer_name);
-                $stmt_new_cust->bindParam(':addr', $customer_address);
-                $stmt_new_cust->bindParam(':email', $customer_email);
-                $stmt_new_cust->bindParam(':id_type', $customer_id_type);
-                $stmt_new_cust->execute();
-                // TODO: Add email to Customer_Email table if needed by schema design
-            }
+            // A. Get/Create Customer
+            $final_customer_id = $customer_id; // Use existing ID if provided
             
-             // B. Re-verify room availability for the dates
+            if (empty($final_customer_id)) { // Create new customer if ID was empty
+                 $final_customer_id = $customer_new_id; // Use the provided SSN/SIN as the ID
+                 
+                 // Check if ID already exists
+                 $stmt_check = $db->prepare("SELECT COUNT(*) FROM Customer WHERE Customer_ID = ?");
+                 $stmt_check->execute([$final_customer_id]);
+                 if ($stmt_check->fetchColumn() > 0) {
+                      throw new Exception("A customer with this ID (SSN/SIN) already exists. Please search for them instead.");
+                 }
+                 
+                 // Insert new customer (NO password set here - they need to register properly for login)
+                 $stmt_new_cust = $db->prepare("INSERT INTO Customer (Customer_ID, Full_Name, Address, Email_Address, Date_of_Registration) VALUES (?, ?, ?, ?, CURDATE())");
+                 $stmt_new_cust->execute([
+                     $final_customer_id,
+                     $customer_name,
+                     $customer_address,
+                     $customer_email // Can be null if not provided
+                 ]);
+                 $message = "New customer created. "; // Append to final success message
+                 $messageType = 'info';
+            }
+
+            // B. Re-verify room availability for the dates (using details from $room_data)
             $stmt_avail = $db->prepare("SELECT COUNT(*) FROM (
                  SELECT 1 FROM Booking b JOIN Reserved_By rb ON b.Booking_ID = rb.Booking_ID
-                 WHERE rb.Hotel_Address = :haddr1 AND rb.Room_Num = :rnum1
-                   AND (b.Start_Date < :end_date1 AND b.End_Date > :start_date1)
+                 WHERE rb.Hotel_Address = ? AND rb.Room_Num = ?
+                   AND (b.Start_Date < ? AND b.End_Date > ?)
                  UNION ALL
-                 SELECT 1 FROM Renting rnt JOIN Rented_By rntb ON rnt.Renting_ID = rntb.Renting_ID
-                 WHERE rntb.Hotel_Address = :haddr2 AND rntb.Room_Num = :rnum2
-                   AND (rnt.Start_Date < :end_date2 AND rnt.End_Date > :start_date2)
+                 SELECT 1 FROM Renting rent JOIN Rented_By rntb ON rent.Renting_ID = rntb.Renting_ID
+                 WHERE rntb.Hotel_Address = ? AND rntb.Room_Num = ?
+                   AND (rent.Start_Date < ? AND rent.End_Date > ?)
              ) AS Conflicts");
-            $stmt_avail->bindParam(':haddr1', $selected_room['Hotel_Address']);
-            $stmt_avail->bindParam(':rnum1', $selected_room['Room_Num'], PDO::PARAM_INT);
-            $stmt_avail->bindParam(':start_date1', $selected_room['start_date']);
-            $stmt_avail->bindParam(':end_date1', $selected_room['end_date']);
-            $stmt_avail->bindParam(':haddr2', $selected_room['Hotel_Address']);
-            $stmt_avail->bindParam(':rnum2', $selected_room['Room_Num'], PDO::PARAM_INT);
-            $stmt_avail->bindParam(':start_date2', $selected_room['start_date']);
-            $stmt_avail->bindParam(':end_date2', $selected_room['end_date']);
-            $stmt_avail->execute(); 
-            $conflictCount = $stmt_avail->fetchColumn(); 
-            if ($conflictCount > 0) {
-                 throw new Exception("Room became unavailable during processing. Please search again.");
+            $stmt_avail->execute([
+                $room_data['Hotel_Address'], $room_data['Room_Num'], $room_data['end_date'], $room_data['start_date'],
+                $room_data['Hotel_Address'], $room_data['Room_Num'], $room_data['end_date'], $room_data['start_date']
+            ]); 
+            if ($stmt_avail->fetchColumn() > 0) {
+                 throw new Exception("Room " . htmlspecialchars($room_data['Room_Num']) . " at " . htmlspecialchars($room_data['Hotel_Address']) . " became unavailable. Please search again.");
             }
 
-            // C. Create Renting
-            $renting_id = uniqid('rent-', true);
-            $check_in_date = date('Y-m-d'); // Use current date for check-in
-            $direct_renting = true; 
-            $stmt_rent = $db->prepare("INSERT INTO Renting (Renting_ID, Start_Date, End_Date, Check_in_Date, Direct_Renting, Customer_ID) VALUES (:rid, :start, :end, :checkin, :direct, :cid)");
-            $stmt_rent->bindParam(':rid', $renting_id);
-            $stmt_rent->bindParam(':start', $selected_room['start_date']);
-            $stmt_rent->bindParam(':end', $selected_room['end_date']);
-            $stmt_rent->bindParam(':checkin', $check_in_date);
-            $stmt_rent->bindParam(':direct', $direct_renting, PDO::PARAM_BOOL);
-            $stmt_rent->bindParam(':cid', $customer_id);
-            $stmt_rent->execute();
+            // C. Create Renting record
+            $renting_id = uniqid('rent_', true);
+            $stmt_rent = $db->prepare("INSERT INTO Renting (Renting_ID, Customer_ID, Start_Date, End_Date, Payment_Amount) VALUES (?, ?, ?, ?, ?)");
+            $stmt_rent->execute([
+                $renting_id, 
+                $final_customer_id, 
+                $room_data['start_date'], 
+                $room_data['end_date'], 
+                $payment_amount
+            ]);
 
-            // D. Create Rented_By
-            $stmt_rented = $db->prepare("INSERT INTO Rented_By (Renting_ID, Hotel_Address, Room_Num) VALUES (:rid, :addr, :num)");
-            $stmt_rented->bindParam(':rid', $renting_id);
-            $stmt_rented->bindParam(':addr', $selected_room['Hotel_Address']);
-            $stmt_rented->bindParam(':num', $selected_room['Room_Num'], PDO::PARAM_INT);
-            $stmt_rented->execute();
+            // D. Link Renting to Room
+            $stmt_rented = $db->prepare("INSERT INTO Rented_By (Renting_ID, Hotel_Address, Room_Num) VALUES (?, ?, ?)");
+            $stmt_rented->execute([$renting_id, $room_data['Hotel_Address'], $room_data['Room_Num']]);
 
-            // E. Create Processes
-            $stmt_proc = $db->prepare("INSERT INTO Processes (SSN, Renting_ID) VALUES (:ssn, :rid)");
-            $stmt_proc->bindParam(':ssn', $employee_id);
-            $stmt_proc->bindParam(':rid', $renting_id);
-            $stmt_proc->execute();
+            // E. Link Employee to Renting
+            $stmt_proc = $db->prepare("INSERT INTO Processes (SSN, Renting_ID) VALUES (?, ?)");
+            $stmt_proc->execute([$employee_id, $renting_id]);
 
             $db->commit();
-            $_SESSION['success_message'] = "Direct rental successful! Renting ID: " . htmlspecialchars($renting_id);
-            header("Location: index.php");
+            $_SESSION['rental_message'] = $message . "Direct rental successful! Renting ID: " . htmlspecialchars($renting_id) . ". Payment: $" . number_format($payment_amount, 2);
+            $_SESSION['rental_message_type'] = 'success';
+            header("Location: direct_rental.php"); // Redirect back to clean rental page
             exit;
 
         } catch (Exception $e) {
             $db->rollBack();
             error_log("Direct rental confirmation error: " . $e->getMessage());
-            // Add specific check for duplicate customer email if needed
-            $message = "Error processing direct rental: " . $e->getMessage();
-            $messageType = 'danger';
-            // Keep $selected_room and $customer_details to refill form
-            $customer_details = [ // Refill manual entry fields if needed
-                 'Customer_ID' => $customer_id, 'Full_Name' => $customer_name, 'Email_Address' => $customer_email, 'Address' => $customer_address
-            ];
+            $_SESSION['rental_message'] = "Error processing direct rental: " . $e->getMessage();
+            $_SESSION['rental_message_type'] = 'danger';
+            // Redirect back to customer step with error
+            header("Location: direct_rental.php?action=search_customer&hotel_addr=".urlencode($room_data['Hotel_Address'] ?? '')."&room_num=".urlencode($room_data['Room_Num'] ?? '')."&start_date=".urlencode($room_data['start_date'] ?? '')."&end_date=".urlencode($room_data['end_date'] ?? '')."&customer_search_term=".urlencode($customer_search_term ?? ''));
+            exit;
         }
-    } else {
-         $message = "Missing room or customer details for rental confirmation.";
-         $messageType = 'danger';
-         // Attempt to keep state if possible
-         if(isset($_POST['selected_room_details'])) $selected_room = json_decode($_POST['selected_room_details'] ?? '[]', true); 
-         $customer_details = [ 'Customer_ID' => $customer_id, 'Full_Name' => $customer_name, 'Email_Address' => $customer_email, 'Address' => $customer_address];
     }
 }
-
 
 ?>
 
@@ -269,129 +269,175 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_direct_rental
         </div>
     <?php endif; ?>
 
-    <?php if (!$selected_room): ?>
-        <!-- Step 1: Search for Available Rooms -->
-        <h2 class="h4 mb-3">Step 1: Find Available Room</h2>
-        <form method="POST" action="direct_rental.php" class="border p-3 rounded bg-light mb-5">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label for="start_date" class="form-label">Start Date</label>
-                    <input type="date" class="form-control" id="start_date" name="start_date" value="<?= htmlspecialchars($start_date) ?>" min="<?= date('Y-m-d') ?>" required>
-                </div>
-                <div class="col-md-4">
-                    <label for="end_date" class="form-label">End Date</label>
-                    <input type="date" class="form-control" id="end_date" name="end_date" value="<?= htmlspecialchars($end_date) ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required>
-                </div>
-                <div class="col-md-4">
-                    <label for="capacity" class="form-label">Capacity</label>
-                    <input type="number" class="form-control" id="capacity" name="capacity" value="<?= htmlspecialchars($capacity) ?>" min="1">
-                </div>
-                <div class="col-md-6">
-                    <label for="area" class="form-label">Area (Optional)</label>
-                    <input type="text" class="form-control" id="area" name="area" value="<?= htmlspecialchars($area) ?>">
-                </div>
-                <div class="col-md-6">
-                    <label for="hotel_address" class="form-label">Hotel Address (Optional)</label>
-                    <input type="text" class="form-control" id="hotel_address" name="hotel_address" value="<?= htmlspecialchars($hotel_address) ?>">
-                </div>
-            </div>
-            <button type="submit" name="search_rooms" class="btn btn-primary mt-3"><i class="fas fa-search me-1"></i> Search Rooms</button>
-        </form>
-
-        <?php if (!empty($available_rooms)): ?>
-            <h3 class="h5 mt-4 mb-3">Available Rooms Found</h3>
-            <div class="list-group">
-                 <?php foreach ($available_rooms as $room): ?>
-                    <div class="list-group-item">
-                         <div class="row align-items-center">
-                            <div class="col-md-8">
-                                 <h5 class="mb-1"><?= htmlspecialchars($room['Chain_Name']) ?> - <?= htmlspecialchars($room['Hotel_Address']) ?> (Room #<?= htmlspecialchars($room['Room_Num']) ?>)</h5>
-                                 <p class="mb-1 small">Area: <?= htmlspecialchars($room['Area']) ?>, Capacity: <?= htmlspecialchars($room['Capacity']) ?>, View: <?= htmlspecialchars($room['View_Type']) ?></p>
-                                 <p class="mb-0 fw-bold">Price: $<?= number_format($room['Price'], 2) ?> / night</p>
-                            </div>
-                             <div class="col-md-4 text-md-end">
-                                 <form method="POST" action="direct_rental.php">
-                                    <input type="hidden" name="selected_hotel_address" value="<?= htmlspecialchars($room['Hotel_Address']) ?>">
-                                    <input type="hidden" name="selected_room_num" value="<?= htmlspecialchars($room['Room_Num']) ?>">
-                                    <input type="hidden" name="start_date" value="<?= htmlspecialchars($start_date) ?>">
-                                    <input type="hidden" name="end_date" value="<?= htmlspecialchars($end_date) ?>">
-                                    <button type="submit" name="select_room" class="btn btn-success">
-                                        <i class="fas fa-check me-1"></i> Select Room
-                                    </button>
-                                </form>
-                             </div>
-                         </div>
+    <?php // --- STEP 1: Search Rooms --- ?>
+    <?php if ($action === 'search_rooms'): ?>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            Step 1: Find Available Rooms
+        </div>
+        <div class="card-body">
+            <form method="GET" action="direct_rental.php">
+                <input type="hidden" name="action" value="search_rooms">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label for="start_date" class="form-label">Check-in Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" value="<?= htmlspecialchars($start_date) ?>" required>
                     </div>
-                 <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-        
-    <?php else: ?>
-        <!-- Step 2 & 3: Enter Customer Details & Confirm -->
-        <div class="card shadow mb-4">
-             <div class="card-header bg-success text-white">
-                 <h2 class="h4 mb-0">Step 2: Enter Customer Details</h2>
-             </div>
-             <div class="card-body">
-                 <p><strong>Selected Room:</strong> <?= htmlspecialchars($selected_room['Chain_Name']) ?> - <?= htmlspecialchars($selected_room['Hotel_Address']) ?> (Room #<?= htmlspecialchars($selected_room['Room_Num']) ?>)</p>
-                 <p><strong>Dates:</strong> <?= date("M j, Y", strtotime($selected_room['start_date'])) ?> to <?= date("M j, Y", strtotime($selected_room['end_date'])) ?></p>
-                 <hr>
-                 
-                 <!-- Customer Search -->
-                 <form method="POST" action="direct_rental.php" class="mb-4">
-                     <label for="customer_search_term" class="form-label">Search Existing Customer (Name or Email)</label>
-                     <div class="input-group">
-                         <input type="text" class="form-control" id="customer_search_term" name="customer_search_term">
-                         <input type="hidden" name="selected_room_details" value='<?= htmlspecialchars(json_encode($selected_room)) ?>'>
-                         <button class="btn btn-secondary" type="submit" name="search_customer"><i class="fas fa-search me-1"></i> Find Customer</button>
+                    <div class="col-md-3">
+                        <label for="end_date" class="form-label">Check-out Date</label>
+                        <input type="date" class="form-control" id="end_date" name="end_date" value="<?= htmlspecialchars($end_date) ?>" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="capacity" class="form-label">Min Capacity</label>
+                        <input type="number" class="form-control" id="capacity" name="capacity" value="<?= htmlspecialchars($capacity) ?>" min="0">
+                    </div>
+                     <div class="col-md-4">
+                        <label for="area" class="form-label">Area</label>
+                        <select class="form-select" id="area" name="area">
+                            <option value="">Any Area</option>
+                            <?php foreach ($areas as $area_opt): ?>
+                            <option value="<?= htmlspecialchars($area_opt) ?>" <?= ($area == $area_opt) ? 'selected' : '' ?>><?= htmlspecialchars($area_opt) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                 <div class="row g-3 mb-3">
+                     <div class="col-md-4">
+                        <label for="chain" class="form-label">Hotel Chain</label>
+                        <select class="form-select" id="chain" name="chain">
+                            <option value="">Any Chain</option>
+                             <?php foreach ($chains_list as $chain_opt): ?>
+                            <option value="<?= htmlspecialchars($chain_opt) ?>" <?= ($chain == $chain_opt) ? 'selected' : '' ?>><?= htmlspecialchars($chain_opt) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                     <div class="col-md-4">
+                         <label for="min_price" class="form-label">Min Price ($)</label>
+                         <input type="number" step="0.01" class="form-control" id="min_price" name="min_price" value="<?= htmlspecialchars($min_price ?? '') ?>" placeholder="e.g., 50">
                      </div>
-                 </form>
-                 
-                 <!-- Customer Details Form -->
-                 <form method="POST" action="direct_rental.php" onsubmit="return confirm('Confirm direct rental for this room and customer?')">
-                     <input type="hidden" name="selected_room_details" value='<?= htmlspecialchars(json_encode($selected_room)) ?>'>
-                     
-                     <?php if ($customer_details): // If existing customer found ?>
-                         <h3 class="h5">Selected Customer:</h3>
-                         <p><strong>Name:</strong> <?= htmlspecialchars($customer_details['Full_Name']) ?></p>
-                         <p><strong>Email:</strong> <?= htmlspecialchars($customer_details['Email_Address']) ?></p>
-                         <input type="hidden" name="customer_id" value="<?= htmlspecialchars($customer_details['Customer_ID']) ?>">
-                         <hr>
-                     <?php else: // Manual entry for new or not-found customer ?>
-                        <h3 class="h5">New Customer Details:</h3>
-                         <input type="hidden" name="customer_id" value=""> <!-- No existing ID -->
-                         <div class="mb-3">
-                             <label for="customer_name" class="form-label">Full Name <span class="text-danger">*</span></label>
-                             <input type="text" class="form-control" id="customer_name" name="customer_name" value="<?= htmlspecialchars($customer_details['Full_Name'] ?? '') ?>" required>
-                         </div>
-                         <div class="mb-3">
-                             <label for="customer_email" class="form-label">Email Address <span class="text-danger">*</span></label>
-                             <input type="email" class="form-control" id="customer_email" name="customer_email" value="<?= htmlspecialchars($customer_details['Email_Address'] ?? '') ?>" required>
-                         </div>
-                         <div class="mb-3">
-                             <label for="customer_address" class="form-label">Address <span class="text-danger">*</span></label>
-                             <input type="text" class="form-control" id="customer_address" name="customer_address" value="<?= htmlspecialchars($customer_details['Address'] ?? '') ?>" required>
-                         </div>
-                          <div class="mb-3">
-                             <label for="customer_id_type" class="form-label">ID Type</label>
-                             <select class="form-select" id="customer_id_type" name="customer_id_type">
-                                 <option value="Passport" selected>Passport</option>
-                                 <option value="Driver License">Driver License</option>
-                                 <option value="National ID">National ID</option>
-                             </select>
-                         </div>
-                         <p class="small text-muted">Note: A password will not be set for this customer via direct rental.</p>
-                         <hr>
-                     <?php endif; ?>
-                     
-                     <button type="submit" name="confirm_direct_rental" class="btn btn-lg btn-success">
-                         <i class="fas fa-check-circle me-2"></i> Confirm Direct Rental
-                     </button>
-                     <a href="direct_rental.php" class="btn btn-secondary ms-2">Start Over</a>
-                 </form>
-             </div>
+                     <div class="col-md-4">
+                         <label for="max_price" class="form-label">Max Price ($)</label>
+                         <input type="number" step="0.01" class="form-control" id="max_price" name="max_price" value="<?= htmlspecialchars($max_price ?? '') ?>" placeholder="e.g., 200">
+                     </div>
+                 </div>
+                <button type="submit" name="search_rooms_submit" class="btn btn-primary">Search Available Rooms</button>
+            </form>
+        </div>
+    </div>
+
+    <?php if (!empty($available_rooms)): ?>
+        <h3 class="h5 mt-4 mb-3">Available Rooms Found</h3>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover">
+                <thead>
+                    <tr><th>Hotel</th><th>Area</th><th>Room #</th><th>Capacity</th><th>Price/Night</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($available_rooms as $room): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($room['Chain_Name']) ?><br><small><?= htmlspecialchars($room['Hotel_Address']) ?></small></td>
+                        <td><?= htmlspecialchars($room['Area']) ?></td>
+                        <td><?= htmlspecialchars($room['Room_Num']) ?></td>
+                        <td><?= htmlspecialchars($room['Capacity']) ?></td>
+                        <td>$<?= number_format($room['Price'], 2) ?></td>
+                        <td>
+                            <a href="direct_rental.php?action=search_customer&hotel_addr=<?= urlencode($room['Hotel_Address']) ?>&room_num=<?= $room['Room_Num'] ?>&start_date=<?= urlencode($start_date) ?>&end_date=<?= urlencode($end_date) ?>" class="btn btn-sm btn-success">Select Room</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
     <?php endif; ?>
+    <?php endif; // End Step 1 ?>
+
+
+    <?php // --- STEP 2: Select/Enter Customer --- ?>
+    <?php if ($action === 'search_customer' && $selected_room): 
+        // Calculate nights/price for display
+        $nights = 0; $total_price = 0;
+        try {
+            $start = new DateTime($selected_room['start_date']);
+            $end = new DateTime($selected_room['end_date']);
+            $interval = $end->diff($start);
+            $nights = $interval->days > 0 ? $interval->days : 1;
+            $total_price = $selected_room['Price'] * $nights;
+        } catch (Exception $e) { /* Ignore */ }
+    ?>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            Step 2: Assign Customer & Payment
+        </div>
+        <div class="card-body">
+            <h4 class="h6">Selected Room:</h4>
+            <p>
+                <strong>Hotel:</strong> <?= htmlspecialchars($selected_room['Chain_Name']) ?> - <?= htmlspecialchars($selected_room['Hotel_Address']) ?><br>
+                <strong>Room:</strong> #<?= htmlspecialchars($selected_room['Room_Num']) ?> | <strong>Capacity:</strong> <?= htmlspecialchars($selected_room['Capacity']) ?> | <strong>Price:</strong> $<?= number_format($selected_room['Price'], 2) ?>/night<br>
+                <strong>Dates:</strong> <?= date("M j, Y", strtotime($selected_room['start_date'])) ?> to <?= date("M j, Y", strtotime($selected_room['end_date'])) ?> (<?= $nights ?> nights)<br>
+                <strong>Estimated Total:</strong> $<?= number_format($total_price, 2) ?>
+            </p>
+            <hr>
+
+            <h4 class="h6">Find Existing Customer (Optional):</h4>
+             <form method="GET" action="direct_rental.php" class="mb-3">
+                 <input type="hidden" name="action" value="search_customer">
+                 <input type="hidden" name="hotel_addr" value="<?= htmlspecialchars($selected_room['Hotel_Address']) ?>">
+                 <input type="hidden" name="room_num" value="<?= htmlspecialchars($selected_room['Room_Num']) ?>">
+                 <input type="hidden" name="start_date" value="<?= htmlspecialchars($selected_room['start_date']) ?>">
+                 <input type="hidden" name="end_date" value="<?= htmlspecialchars($selected_room['end_date']) ?>">
+                 <div class="input-group">
+                     <input type="text" class="form-control" placeholder="Search by Name, Email, or Customer ID (SSN/SIN)..." name="customer_search_term" value="<?= htmlspecialchars($customer_search_term) ?>">
+                     <button class="btn btn-secondary" type="submit"><i class="fas fa-search"></i> Find Customer</button>
+                 </div>
+             </form>
+
+            <hr>
+            <h4 class="h6">Customer Details:</h4>
+            <form method="POST" action="direct_rental.php">
+                 <input type="hidden" name="action" value="confirm_direct_rental">
+                 <input type="hidden" name="selected_room_details" value='<?= htmlspecialchars(json_encode($selected_room)) ?>'>
+                 <input type="hidden" name="customer_id" value="<?= htmlspecialchars($customer_to_rent['Customer_ID'] ?? '') ?>"> 
+
+                 <div class="row g-3 mb-3">
+                     <div class="col-md-6">
+                         <label for="customer_new_id" class="form-label">Customer ID (SSN/SIN) <span class="text-danger">*</span></label>
+                         <input type="text" class="form-control" id="customer_new_id" name="customer_new_id" value="<?= htmlspecialchars($customer_to_rent['Customer_ID'] ?? '') ?>" <?= !empty($customer_to_rent) ? 'readonly' : 'required' ?>>
+                         <div class="form-text">Required for new customer. Cannot be changed for existing customer.</div>
+                     </div>
+                      <div class="col-md-6">
+                         <label for="customer_name" class="form-label">Full Name <span class="text-danger">*</span></label>
+                         <input type="text" class="form-control" id="customer_name" name="customer_name" value="<?= htmlspecialchars($customer_to_rent['Full_Name'] ?? '') ?>" required>
+                     </div>
+                </div>
+                <div class="row g-3 mb-3">
+                     <div class="col-md-6">
+                         <label for="customer_email" class="form-label">Email Address</label>
+                         <input type="email" class="form-control" id="customer_email" name="customer_email" value="<?= htmlspecialchars($customer_to_rent['Email_Address'] ?? '') ?>">
+                     </div>
+                     <div class="col-md-6">
+                         <label for="customer_address" class="form-label">Address <span class="text-danger">*</span></label>
+                         <input type="text" class="form-control" id="customer_address" name="customer_address" value="<?= htmlspecialchars($customer_to_rent['Address'] ?? '') ?>" required>
+                     </div>
+                </div>
+                 <div class="row g-3 mb-3">
+                      <div class="col-md-6">
+                         <label for="payment_amount" class="form-label">Payment Amount Collected <span class="text-danger">*</span></label>
+                         <div class="input-group">
+                             <span class="input-group-text">$</span>
+                             <input type="number" step="0.01" min="0" class="form-control" id="payment_amount" name="payment_amount" value="<?= number_format($total_price, 2) ?>" required>
+                         </div>
+                     </div>
+                     <!-- Add Payment Method if needed -->
+                 </div>
+
+                 <div class="mt-3 d-flex justify-content-between">
+                      <a href="direct_rental.php" class="btn btn-secondary">Cancel / Start Over</a>
+                     <button type="submit" name="confirm_direct_rental" class="btn btn-success btn-lg">Confirm Rental & Payment</button>
+                 </div>
+            </form>
+        </div>
+    </div>
+    <?php endif; // End Step 2 ?>
 
 </div>
 

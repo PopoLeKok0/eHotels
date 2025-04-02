@@ -4,13 +4,25 @@
  * Based on Deliverable 1 by Mouad Ben lahbib (300259705)
  */
 
-// Start session if not already started
+// --- Detect AJAX Request ---
+$isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest' && isset($_GET['ajax']) && $_GET['ajax'] == '1';
+
+// Start session if not already started (needed for login status)
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Include database connection
 require_once 'config/database.php';
 
-// Include header
-include 'includes/header.php';
+// --- Check Login Status --- Needed for Booking button
+$isCustomerLoggedIn = isset($_SESSION['user_id']) && isset($_SESSION['role']) && $_SESSION['role'] === 'customer';
+$customer_ssn = $isCustomerLoggedIn ? $_SESSION['user_id'] : null; // Assuming user_id is customer SSN
+
+// Only include full header if not an AJAX request
+if (!$isAjax) {
+    include 'includes/header.php';
+}
 
 // Initialize the database
 $db = getDatabase();
@@ -25,12 +37,13 @@ $start_date = isset($_GET['start_date']) ? trim($_GET['start_date']) : date('Y-m
 $end_date = isset($_GET['end_date']) ? trim($_GET['end_date']) : date('Y-m-d', strtotime('+3 days'));
 $extendable = isset($_GET['extendable']) ? true : false;
 $total_rooms_range = isset($_GET['total_rooms']) ? trim($_GET['total_rooms']) : ''; // Get total rooms filter
+$price_range = isset($_GET['price_range']) ? trim($_GET['price_range']) : '';
 
 // Process price range
 $min_price = 0;
 $max_price = 10000; // Default max price
-if (isset($_GET['price_range']) && !empty($_GET['price_range'])) {
-    $price_parts = explode('-', $_GET['price_range']);
+if (!empty($price_range)) {
+    $price_parts = explode('-', $price_range);
     if (count($price_parts) == 2) {
         $min_price = floatval($price_parts[0]);
         $max_price = floatval($price_parts[1]);
@@ -47,6 +60,13 @@ if (!empty($total_rooms_range)) {
         $max_total_rooms = intval($room_range_parts[1]);
     }
 }
+
+// Initialize variables for results and filters
+$rooms = [];
+$areas = [];
+$chains = [];
+$total_results = 0;
+$errorMessage = '';
 
 // Build search query
 try {
@@ -141,51 +161,58 @@ try {
     $params[':start_date2'] = $start_date;
     $params[':end_date2'] = $end_date;
     
-    $query .= " ORDER BY h.Star_Rating DESC, r.Price ASC";
+    $query .= " ORDER BY h.Star_Rating DESC, r.Price ASC LIMIT 200";
     
     // Execute query
-    $rooms = $db->query($query, $params);
-    
+    $stmt = $db->getConnection()->prepare($query);
+    $stmt->execute($params);
+    $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $total_results = count($rooms);
+
     // Get areas for filter
-    $areas = $db->query("SELECT DISTINCT Area FROM Hotel ORDER BY Area");
+    $stmtAreas = $db->getConnection()->query("SELECT DISTINCT Area FROM Hotel ORDER BY Area");
+    $areas = $stmtAreas->fetchAll(PDO::FETCH_ASSOC);
     
     // Get chains for filter
-    $chains = $db->query("SELECT Chain_Name FROM Hotel_Chain ORDER BY Chain_Name");
-    
-    // Count results
-    $total_results = count($rooms);
-    
-} catch (Exception $e) {
-    $_SESSION['error_message'] = "Error searching for rooms: " . $e->getMessage();
-    $rooms = [];
-    $areas = [];
-    $chains = [];
-    $total_results = 0;
-}
+    $stmtChains = $db->getConnection()->query("SELECT Chain_Name FROM Hotel_Chain ORDER BY Chain_Name");
+    $chains = $stmtChains->fetchAll(PDO::FETCH_ASSOC);
 
-// Check if query results are valid before using them
-if ($areas === false) {
-    error_log("Search.php: Failed to fetch areas.");
-    $areas = []; // Set to empty array to prevent errors in foreach
-}
-if ($chains === false) {
-    error_log("Search.php: Failed to fetch chains.");
-    $chains = []; // Set to empty array to prevent errors in foreach
-}
-if ($rooms === false) {
-    error_log("Search.php: Failed to fetch rooms.");
-    $rooms = []; // Set to empty array to prevent errors in foreach
+} catch (Exception $e) {
+    $errorMessage = "Error searching for rooms: " . $e->getMessage();
+    error_log($errorMessage);
+    if ($isAjax) {
+        http_response_code(500); // Send server error status for AJAX
+        echo "<div class=\"alert alert-danger\">Server error fetching results. Please try again.</div>";
+        exit; // Stop processing for AJAX error
+    } else {
+        $_SESSION['error_message'] = $errorMessage; // Show error on full page load
+    }
+    $rooms = [];
     $total_results = 0;
-} else {
-     // Count results only if query succeeded
-     $total_results = count($rooms); 
 }
 
 // Calculate nights for price calculation
-$date1 = new DateTime($start_date);
-$date2 = new DateTime($end_date);
-$interval = $date1->diff($date2);
-$nights = $interval->days;
+$nights = 0;
+try {
+    if (!empty($start_date) && !empty($end_date)) {
+        $date1 = new DateTime($start_date);
+        $date2 = new DateTime($end_date);
+        if ($date2 > $date1) { // Ensure end date is after start date
+            $interval = $date1->diff($date2);
+            $nights = $interval->days;
+        } else {
+             if (!$isAjax) $_SESSION['error_message'] = "End date must be after start date.";
+        }
+    }
+} catch (Exception $e) {
+     if (!$isAjax) $_SESSION['error_message'] = "Invalid date format entered.";
+     error_log("Date calculation error: " . $e->getMessage());
+}
+
+// --- Start Output --- 
+
+// If NOT an AJAX request, display the full page structure (header, filters, etc.)
+if (!$isAjax): 
 ?>
 
 <!-- Search Results Hero -->
@@ -208,24 +235,20 @@ $nights = $interval->days;
     <div class="row">
         <!-- Search Filter Sidebar -->
         <div class="col-lg-3">
-            <div class="card mb-4">
+            <div class="card mb-4 sticky-top" style="top: 80px;"> <!-- Make sidebar sticky -->
                 <div class="card-header bg-light">
-                    <h5 class="mb-0">Filter Results</h5>
+                    <h5 class="mb-0">Filter Options</h5>
                 </div>
                 <div class="card-body">
-                    <form action="search.php" method="GET" id="filterForm">
+                    <!-- IMPORTANT: Give the form the ID 'ajaxSearchForm' -->
+                    <form action="search.php" method="GET" id="ajaxSearchForm">
                         <div class="mb-3">
                             <label for="area" class="form-label">Location</label>
                             <select name="area" id="area" class="form-select">
                                 <option value="">All Areas</option>
-                                <?php if (is_array($areas) || $areas instanceof Traversable): // Check before looping ?>
-                                    <?php foreach ($areas as $area_option): ?>
-                                        <option value="<?= htmlspecialchars($area_option['Area']) ?>" 
-                                                <?= (isset($area) && $area == $area_option['Area']) ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($area_option['Area']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                <?php foreach ($areas as $area_option): ?>
+                                    <option value="<?= htmlspecialchars($area_option['Area']) ?>" <?= ($area == $area_option['Area']) ? 'selected' : '' ?>><?= htmlspecialchars($area_option['Area']) ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         
@@ -233,14 +256,9 @@ $nights = $interval->days;
                             <label for="chain" class="form-label">Hotel Chain</label>
                             <select name="chain" id="chain" class="form-select">
                                 <option value="">All Chains</option>
-                                <?php if (is_array($chains) || $chains instanceof Traversable): // Check before looping ?>
-                                    <?php foreach ($chains as $chain_option): ?>
-                                        <option value="<?= htmlspecialchars($chain_option['Chain_Name']) ?>" 
-                                                <?= (isset($chain) && $chain == $chain_option['Chain_Name']) ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($chain_option['Chain_Name']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                <?php foreach ($chains as $chain_option): ?>
+                                    <option value="<?= htmlspecialchars($chain_option['Chain_Name']) ?>" <?= ($chain == $chain_option['Chain_Name']) ? 'selected' : '' ?>><?= htmlspecialchars($chain_option['Chain_Name']) ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         
@@ -333,23 +351,20 @@ $nights = $interval->days;
                     <div class="list-group list-group-flush">
                         <?php
                         try {
-                            $availableRooms = $db->query("SELECT Area, Total_Available_Rooms FROM available_rooms_per_area WHERE Total_Available_Rooms > 0 ORDER BY Total_Available_Rooms DESC LIMIT 10");
-                            
-                            if ($availableRooms !== false && (is_array($availableRooms) || $availableRooms instanceof Traversable)): // Check before looping
-                                foreach ($availableRooms as $areaData):
-                        ?>
-                            <a href="search.php?area=<?= urlencode($areaData['Area']) ?>" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                                <?= htmlspecialchars($areaData['Area']) ?>
-                                <span class="badge bg-primary rounded-pill"><?= $areaData['Total_Available_Rooms'] ?></span>
-                            </a>
-                        <?php 
-                                endforeach;
-                            else: // Handle query failure or empty results gracefully
-                                if ($availableRooms === false) {
-                                    error_log("Search.php: Error fetching available rooms per area.");
+                            $view_area_sql = "SELECT * FROM AvailableRoomsPerAreaView ORDER BY Area, Hotel_Name";
+                            $view_area_stmt = $db->getConnection()->query($view_area_sql);
+                            $available_rooms_by_area = $view_area_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                            if ($available_rooms_by_area) {
+                                foreach ($available_rooms_by_area as $area_view) {
+                                    echo '<a href="search.php?area=' . urlencode($area_view['Area']) . '" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">';
+                                    echo htmlspecialchars($area_view['Area']) . ' - ' . htmlspecialchars($area_view['Hotel_Name']);
+                                    echo '<span class="badge bg-primary rounded-pill">' . $area_view['Total_Available_Rooms'] . '</span>';
+                                    echo '</a>';
                                 }
+                            } else {
                                 echo '<div class="list-group-item">No area data available currently.</div>';
-                            endif;
+                            }
                         } catch (Exception $e) {
                             error_log("Error fetching sidebar area data: " . $e->getMessage());
                             echo '<div class="list-group-item">Could not load area data.</div>';
@@ -362,98 +377,75 @@ $nights = $interval->days;
         
         <!-- Search Results -->
         <div class="col-lg-9">
-            <!-- Results Count -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <p class="mb-0"><?= $total_results ?> rooms found</p>
-                <div>
-                    <small class="text-muted">Showing all available rooms for selected dates</small>
+            <!-- Loading Indicator -->
+            <div id="searchLoadingIndicator" style="display: none;" class="text-center my-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
+                <p class="mt-2">Searching for rooms...</p>
             </div>
             
-            <!-- Room Listings -->
-            <?php if ($rooms !== false && count($rooms) > 0): // Also check $rooms itself ?>
-                <?php foreach ($rooms as $room): ?>
-                    <div class="card mb-4 room-card shadow-sm">
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4 mb-3 mb-md-0">
-                                    <h5 class="text-primary"><?= htmlspecialchars($room['Chain_Name']) ?></h5>
-                                    <div class="mb-2 star-rating">
-                                        <?= str_repeat('<i class="fas fa-star text-warning"></i>', $room['Star_Rating']) ?>
-                                    </div>
-                                    <p class="mb-1">
-                                        <strong>Hotel:</strong> <small><?= htmlspecialchars($room['Hotel_Address']) ?></small>
-                                    </p>
-                                    <p class="mb-0">
-                                        <strong>Area:</strong> <?= htmlspecialchars($room['Area']) ?>
-                                    </p>
+            <!-- Error Message Container -->
+            <div id="searchErrorContainer"></div>
+            
+            <!-- IMPORTANT: Container for AJAX results -->
+            <div id="searchResultsContainer">
+                <?php // Results will be loaded here by AJAX, but render initial state if not AJAX ?>
+                <?php if (!empty($errorMessage)): ?>
+                    <div class="alert alert-danger"><?= htmlspecialchars($errorMessage) ?></div>
+                <?php elseif (empty($rooms)): ?>
+                    <div class="alert alert-info">No rooms found matching your criteria. Try adjusting your filters.</div>
+                <?php else: ?>
+                    <?php foreach ($rooms as $room): ?>
+                        <div class="card mb-3 shadow-sm">
+                            <div class="row g-0">
+                                <div class="col-md-4">
+                                    <img src="images/room_placeholder.jpg" class="img-fluid rounded-start" alt="Room image placeholder">
                                 </div>
-                                <div class="col-md-4 mb-3 mb-md-0 border-start border-end">
-                                    <h6>Room #<?= htmlspecialchars($room['Room_Num']) ?></h6>
-                                    <ul class="list-unstyled mb-0 small">
-                                        <li><strong>Capacity:</strong> <?= htmlspecialchars($room['Capacity']) ?> <?= ($room['Capacity'] == 1) ? 'Person' : 'People' ?></li>
-                                        <li><strong>View:</strong> <?= htmlspecialchars($room['View_Type']) ?></li>
-                                        <li><strong>Extendable:</strong> <?= $room['Extendable'] ? 'Yes' : 'No' ?></li>
-                                    </ul>
-                                    <p class="mt-2 mb-0 small text-muted">
-                                         <strong>Amenities:</strong> <?= htmlspecialchars($room['Amenities']) ?>
-                                    </p>
-                                </div>
-                                <div class="col-md-4 text-md-end">
-                                    <div class="room-price mb-2">
-                                        <span class="fs-4 fw-bold">$<?= number_format($room['Price'], 2) ?></span> <small class="text-muted">/ night</small>
+                                <div class="col-md-8">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><?= htmlspecialchars($room['Chain_Name']) ?> - <?= htmlspecialchars($room['Area']) ?></h5>
+                                        <h6 class="card-subtitle mb-2 text-muted">Room <?= htmlspecialchars($room['Room_Num']) ?> at <?= htmlspecialchars($room['Hotel_Address']) ?></h6>
+                                        <p class="card-text mb-1">
+                                            <?php for ($i = 1; $i <= $room['Star_Rating']; $i++): ?><i class="fas fa-star text-warning"></i><?php endfor; ?>
+                                        </p>
+                                        <p class="card-text mb-1">
+                                            <i class="fas fa-user-friends me-1"></i> Capacity: <?= htmlspecialchars($room['Capacity']) ?> 
+                                            <?php if ($room['Extendable']): ?>(<i class="fas fa-bed text-success"></i> Extendable)<?php endif; ?>
+                                        </p>
+                                        <p class="card-text mb-1">
+                                            <?php if ($room['View_Type']): ?><i class="fas fa-eye me-1"></i> View: <?= htmlspecialchars($room['View_Type']) ?><br><?php endif; ?>
+                                            <?php if ($room['Amenities']): ?><i class="fas fa-concierge-bell me-1"></i> Amenities: <?= htmlspecialchars($room['Amenities']) ?><?php endif; ?>
+                                        </p>
+                                        <p class="card-text fw-bold fs-5 mb-2">$<?= number_format($room['Price'] * $nights, 2) ?> <span class="fs-6 fw-normal">(<?= $nights ?> nights at $<?= number_format($room['Price'], 2) ?>/night)</span></p>
+                                        
+                                        <?php if ($isCustomerLoggedIn && $nights > 0): ?>
+                                            <!-- Booking Form for Logged-in Customers -->
+                                            <form action="process_booking.php" method="POST">
+                                                <input type="hidden" name="hotel_address" value="<?= htmlspecialchars($room['Hotel_Address']) ?>">
+                                                <input type="hidden" name="room_number" value="<?= htmlspecialchars($room['Room_Num']) ?>">
+                                                <input type="hidden" name="chain_name" value="<?= htmlspecialchars($room['Chain_Name']) ?>">
+                                                <input type="hidden" name="start_date" value="<?= htmlspecialchars($start_date) ?>">
+                                                <input type="hidden" name="end_date" value="<?= htmlspecialchars($end_date) ?>">
+                                                <input type="hidden" name="price_per_night" value="<?= htmlspecialchars($room['Price']) ?>">
+                                                <input type="hidden" name="total_price" value="<?= number_format($room['Price'] * $nights, 2) ?>">
+                                                <input type="hidden" name="nights" value="<?= $nights ?>">
+                                                <!-- Customer SSN is taken from session in process_booking.php -->
+                                                <button type="submit" class="btn btn-success"><i class="fas fa-calendar-plus me-1"></i> Book Now</button>
+                                            </form>
+                                        <?php elseif (!$isCustomerLoggedIn && $nights > 0): ?>
+                                            <a href="login.php?redirect=<?= urlencode($_SERVER['REQUEST_URI']) ?>" class="btn btn-outline-success">Log in to Book</a>
+                                        <?php elseif ($nights <= 0): ?>
+                                             <p class="text-danger"><small>Please select valid dates to enable booking.</small></p>
+                                        <?php endif; ?>
+                                        
                                     </div>
-                                    <div class="total-price mb-3">
-                                        <small>$<?= number_format($room['Price'] * $nights, 2) ?> total (<?= $nights ?> nights)</small>
-                                    </div>
-                                    <?php 
-                                    // Construct booking/login URL (assuming header.php sets $loggedIn etc.)
-                                    $loggedIn = isset($_SESSION['user_id']); // Simple check
-                                    $isCustomer = $loggedIn && isset($_SESSION['role']) && $_SESSION['role'] === 'customer';
-                                    $isEmployee = $loggedIn && isset($_SESSION['role']) && $_SESSION['role'] === 'employee';
-                                    $bookingParams = http_build_query([
-                                        'hotel' => $room['Hotel_Address'], // Corrected case
-                                        'room' => $room['Room_Num'], // Corrected case
-                                        'start' => $start_date,
-                                        'end' => $end_date
-                                    ]);
-                                    $loginRedirect = 'login.php?redirect=' . urlencode("search.php?" . $_SERVER['QUERY_STRING']);
-                                    
-                                    if ($loggedIn && $isCustomer): ?>
-                                        <a href="booking.php?<?= $bookingParams ?>" class="btn btn-primary w-100">
-                                           <i class="fas fa-calendar-check me-1"></i> Book Now
-                                        </a>
-                                    <?php elseif ($loggedIn && $isEmployee): ?>
-                                        <a href="employee/direct_rental.php?<?= $bookingParams ?>" class="btn btn-success w-100">
-                                           <i class="fas fa-key me-1"></i> Rent Room (Employee)
-                                        </a>
-                                    <?php else: ?>
-                                        <a href="<?= $loginRedirect ?>" class="btn btn-secondary w-100">
-                                           <i class="fas fa-sign-in-alt me-1"></i> Login to Book
-                                        </a>
-                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="alert alert-info">
-                    <h4 class="alert-heading">No rooms available!</h4>
-                    <p>No rooms match your search criteria for the selected dates. Please try adjusting your filters or dates.</p>
-                </div>
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Search Tips</h5>
-                        <ul>
-                            <li>Try different dates</li>
-                            <li>Expand your search area</li>
-                            <li>Consider hotels with different star ratings</li>
-                            <li>Adjust your price range</li>
-                        </ul>
-                    </div>
-                </div>
-            <?php endif; ?>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 </div>
@@ -487,6 +479,22 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <?php
-// Include footer
-include 'includes/footer.php';
+// Only include footer if not an AJAX request
+endif; // end if (!$isAjax)
+
+// If it IS an AJAX request, just output the results partial
+if ($isAjax) {
+    // Make variables needed by the partial available
+    $loggedIn = isset($_SESSION['user_id']); 
+    $isCustomer = $loggedIn && isset($_SESSION['role']) && $_SESSION['role'] === 'customer';
+    $isEmployee = $loggedIn && isset($_SESSION['role']) && $_SESSION['role'] === 'employee';
+    
+    // Include the results partial directly
+    include 'includes/_search_results.php';
+}
+
+// Include footer only on full page loads
+if (!$isAjax) {
+    include 'includes/footer.php';
+}
 ?> 

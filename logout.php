@@ -19,7 +19,7 @@ if (ini_get("session.use_cookies")) {
 // Destroy the session
 session_destroy();
 
-// Redirect to the homepage
-header("Location: index.php");
+// Redirect to the login page
+header("Location: login.php");
 exit;
 ?> 

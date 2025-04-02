@@ -33,56 +33,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             $user = null;
             $role = null;
 
-            // --- Try finding Customer by Email ---
-            $stmt_cust_email = $db->prepare("SELECT Customer_ID, Full_Name, Address, Email_Address, Password_Hash FROM Customer WHERE Email_Address = :email");
-            $stmt_cust_email->bindParam(':email', $loginIdentifier);
-            $stmt_cust_email->execute();
-            $customer = $stmt_cust_email->fetch(PDO::FETCH_ASSOC);
+            // --- Try finding Customer by Email or Customer_ID ---
+            $stmt_cust = $db->prepare("
+                SELECT Customer_ID, Full_Name, Address, Email_Address, Password_Hash 
+                FROM Customer 
+                WHERE Email_Address = ? OR Customer_ID = ?
+            ");
+            $stmt_cust->execute([$loginIdentifier, $loginIdentifier]);
+            $customer = $stmt_cust->fetch(PDO::FETCH_ASSOC);
 
             if ($customer && password_verify($passwordInput, $customer['Password_Hash'])) {
                 $user = $customer;
                 $role = 'customer';
-                $_SESSION['user_id'] = $user['Customer_ID']; 
-                $_SESSION['customer_name'] = $user['Full_Name'];
+                $_SESSION['user_id'] = $user['Customer_ID'];
+                $_SESSION['customer_name'] = $user['Full_Name']; // Stored for convenience
                 $_SESSION['username'] = $user['Full_Name']; 
-                $_SESSION['customer_email'] = $user['Email_Address']; 
-                $_SESSION['customer_address'] = $user['Address'];
-                // Note: SIN/ID is not directly stored in Customer table anymore by default
-                // $_SESSION['customer_sin'] = null; // Clear or retrieve if needed from elsewhere
+                // Store other details if needed
             } else {
-                // --- If not customer by email, try Employee by Email ---
-                $stmt_emp_email = $db->prepare("SELECT SSN, Full_Name, Address, Email_Address, Password_Hash, Position FROM Employee WHERE Email_Address = :email");
-                $stmt_emp_email->bindParam(':email', $loginIdentifier);
-                $stmt_emp_email->execute();
-                $employee = $stmt_emp_email->fetch(PDO::FETCH_ASSOC);
+                // --- If not customer, try Employee by SSN ---
+                $stmt_emp = $db->prepare("
+                    SELECT SSN, Full_Name, Position, Password_Hash 
+                    FROM Employee 
+                    WHERE SSN = ?
+                ");
+                $stmt_emp->execute([$loginIdentifier]);
+                $employee = $stmt_emp->fetch(PDO::FETCH_ASSOC);
 
-                if ($employee && password_verify($passwordInput, $employee['Password_Hash'])) {
+                // Use password_verify against the stored hash
+                if ($employee && isset($employee['Password_Hash']) && password_verify($passwordInput, $employee['Password_Hash'])) {
                     $user = $employee;
                     $role = 'employee';
-                    $_SESSION['user_id'] = $user['SSN']; // Using SSN as employee ID
-                    $_SESSION['employee_name'] = $user['Full_Name']; 
+                    $_SESSION['user_id'] = $user['SSN'];
+                    $_SESSION['employee_name'] = $user['Full_Name']; // Stored for convenience
                     $_SESSION['username'] = $user['Full_Name']; 
-                    $_SESSION['employee_position'] = $user['Position']; 
-                    // Might need to store Hotel Address if they only work at one
-                } else {
-                    // --- If not found by email, try Employee by SIN/SSN ---
-                    // (Assuming SIN/SSN format is distinct enough from email)
-                    if (!filter_var($loginIdentifier, FILTER_VALIDATE_EMAIL)) {
-                         $stmt_emp_ssn = $db->prepare("SELECT SSN, Full_Name, Address, Email_Address, Password_Hash, Position FROM Employee WHERE SSN = :ssn");
-                         $stmt_emp_ssn->bindParam(':ssn', $loginIdentifier);
-                         $stmt_emp_ssn->execute();
-                         $employee_ssn = $stmt_emp_ssn->fetch(PDO::FETCH_ASSOC);
-
-                         if ($employee_ssn && password_verify($passwordInput, $employee_ssn['Password_Hash'])) {
-                             $user = $employee_ssn;
-                             $role = 'employee';
-                             $_SESSION['user_id'] = $user['SSN'];
-                             $_SESSION['employee_name'] = $user['Full_Name']; 
-                             $_SESSION['username'] = $user['Full_Name']; 
-                             $_SESSION['employee_position'] = $user['Position'];
-                         }
-                    }
+                    $_SESSION['employee_position'] = $user['Position'];
+                    // Optional: Store Hotel_Address if needed globally
+                    // $_SESSION['employee_hotel'] = $user['Hotel_Address']; 
                 }
+                 // Note: Removed the Employee by Email check for simplicity, assuming SSN is primary login for employees.
+                 // Add it back if employees should also log in via email.
             }
             
             // --- Check login result ---
@@ -101,10 +90,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
         } catch (PDOException $e) {
             error_log("Login DB Error: " . $e->getMessage());
-            $message = "An error occurred during login. Please try again later.";
+            // --- DEBUG: Show specific PDO error ---
+            $message = "Database Error during login: [" . $e->getCode() . "] " . htmlspecialchars($e->getMessage());
+            // --- END DEBUG ---
+            // $message = "An error occurred during login. Please try again later."; // Original generic message
         } catch (Exception $e) {
             error_log("Login Error: " . $e->getMessage());
-            $message = "An unexpected error occurred. Please try again later.";
+            // --- DEBUG: Show specific general error ---
+             $message = "General Error during login: " . htmlspecialchars($e->getMessage());
+            // --- END DEBUG ---
+            // $message = "An unexpected error occurred. Please try again later."; // Original generic message
         }
     }
 }

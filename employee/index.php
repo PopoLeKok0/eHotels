@@ -26,6 +26,29 @@ $employee_id = $_SESSION['user_id']; // Assuming user_id holds SSN for employees
 $employee_name = $_SESSION['employee_name'] ?? 'Employee';
 $employee_position = $_SESSION['employee_position'] ?? 'N/A';
 
+// Get Database connection
+$db = getDatabase();
+$conn = $db->getConnection();
+$view_errors = [];
+$available_rooms_data = [];
+$hotel_capacity_data = [];
+
+// Fetch data from View 1: Available Rooms Per Area
+try {
+    $stmt = $conn->query("SELECT Area, NumberOfAvailableRooms FROM AvailableRoomsPerArea ORDER BY Area");
+    $available_rooms_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $view_errors[] = "Error fetching available rooms per area: " . $e->getMessage();
+}
+
+// Fetch data from View 2: Hotel Room Capacity
+try {
+    $stmt = $conn->query("SELECT Hotel_Address, TotalCapacity FROM HotelRoomCapacity ORDER BY Hotel_Address");
+    $hotel_capacity_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $view_errors[] = "Error fetching hotel room capacity: " . $e->getMessage();
+}
+
 ?>
 
 <div class="container my-5">
@@ -43,67 +66,121 @@ $employee_position = $_SESSION['employee_position'] ?? 'N/A';
         echo '<div class="alert alert-danger alert-dismissible fade show" role="alert">'.htmlspecialchars($_SESSION['error_message']).'<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
         unset($_SESSION['error_message']);
     }
+    // Display errors fetching view data
+    if (!empty($view_errors)) {
+        echo '<div class="alert alert-warning alert-dismissible fade show" role="alert"><strong>Could not load some dashboard data:</strong><ul>';
+        foreach ($view_errors as $error) {
+            echo '<li>' . htmlspecialchars($error) . '</li>';
+        }
+        echo '</ul><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+    }
     ?>
 
-    <div class="row g-4">
+    <div class="row g-4 mb-4">
         <!-- Check-in Section -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-calendar-check me-2"></i>Process Check-in</h5>
-                    <p class="card-text">Find a customer's booking and convert it to a renting.</p>
-                    <a href="check_in.php" class="btn btn-primary">Go to Check-in</a> 
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title"><i class="fas fa-calendar-check me-2 text-primary"></i>Process Check-in</h5>
+                    <p class="card-text flex-grow-1">Find a customer's booking and convert it to a renting.</p>
+                    <a href="check_in.php" class="btn btn-primary mt-auto">Go to Check-in</a> 
                 </div>
             </div>
         </div>
 
         <!-- Direct Rental Section -->
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-key me-2"></i>Direct Room Rental</h5>
-                    <p class="card-text">Rent an available room directly for a walk-in customer.</p>
-                    <a href="direct_rental.php" class="btn btn-success">Go to Direct Rental</a>
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title"><i class="fas fa-key me-2 text-success"></i>Direct Room Rental</h5>
+                    <p class="card-text flex-grow-1">Rent an available room directly for a walk-in customer.</p>
+                    <a href="direct_rental.php" class="btn btn-success mt-auto">Go to Direct Rental</a>
                 </div>
             </div>
         </div>
 
-        <!-- Room Management (Example) -->
-         <div class="col-md-6">
-            <div class="card h-100">
+        <!-- Customer Management -->
+         <div class="col-lg-4 col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title"><i class="fas fa-users me-2 text-info"></i>Manage Customers</h5>
+                    <p class="card-text flex-grow-1">View, add, edit, or delete customer information.</p>
+                    <a href="manage_customers.php" class="btn btn-info mt-auto">Manage Customers</a> 
+                </div>
+            </div>
+        </div>
+    </div> <!-- /row for core actions -->
+
+    <hr class="my-4">
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>Available Rooms by Area (View 1)</h5>
+                </div>
                 <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-door-open me-2"></i>Manage Rooms</h5>
-                    <p class="card-text">View room status, update details, and manage availability.</p>
-                    <a href="manage_rooms.php" class="btn btn-secondary">Manage Rooms</a> <!-- Link TBD -->
+                    <?php if (empty($available_rooms_data) && empty($view_errors)): ?>
+                        <p class="text-muted">No data available or view not created yet.</p>
+                    <?php elseif (!empty($available_rooms_data)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Area</th>
+                                        <th>Available Rooms</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($available_rooms_data as $row): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($row['Area']) ?></td>
+                                            <td><?= htmlspecialchars($row['NumberOfAvailableRooms']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
 
-        <!-- Customer Management (Example) -->
-         <div class="col-md-6">
-            <div class="card h-100">
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-hotel me-2"></i>Total Room Capacity by Hotel (View 2)</h5>
+                </div>
                 <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-users me-2"></i>Manage Customers</h5>
-                    <p class="card-text">View customer information and booking history.</p>
-                    <a href="manage_customers.php" class="btn btn-secondary">Manage Customers</a> <!-- Link TBD -->
+                     <?php if (empty($hotel_capacity_data) && empty($view_errors)): ?>
+                        <p class="text-muted">No data available or view not created yet.</p>
+                    <?php elseif (!empty($hotel_capacity_data)): ?>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Hotel Address</th>
+                                        <th>Total Capacity</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($hotel_capacity_data as $row): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($row['Hotel_Address']) ?></td>
+                                            <td><?= htmlspecialchars($row['TotalCapacity']) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                     <?php endif; ?>
                 </div>
             </div>
         </div>
-        
-         <!-- View Reports (Example) -->
-         <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="fas fa-chart-line me-2"></i>View Reports</h5>
-                    <p class="card-text">Access database views like rooms per area and hotel capacity.</p>
-                    <a href="reports.php" class="btn btn-info">View Reports</a> <!-- Link TBD -->
-                </div>
-            </div>
-        </div>
+    </div><!-- /row for views -->
 
-    </div> <!-- /row -->
 
-</div>
+</div> <!-- /container -->
 
 <?php
 // Include main footer for now

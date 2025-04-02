@@ -8,8 +8,95 @@ document.addEventListener('DOMContentLoaded', function() {
     initDateValidation();
     initAlertDismissal();
     initFormValidation();
+    initAjaxSearchForm(); // Initialize AJAX search form handling
     // initDropdownToggle(); // Commented out - Bootstrap should handle this automatically
 });
+
+/**
+ * Initialize AJAX handling for the room search form.
+ */
+function initAjaxSearchForm() {
+    const searchForm = document.getElementById('ajaxSearchForm'); // Target the form with ID 'ajaxSearchForm'
+    const resultsContainer = document.getElementById('searchResultsContainer');
+    const loadingIndicator = document.getElementById('searchLoadingIndicator');
+    const errorContainer = document.getElementById('searchErrorContainer');
+    let debounceTimer;
+
+    if (!searchForm || !resultsContainer || !loadingIndicator || !errorContainer) {
+        // console.log("Required elements for AJAX search not found on this page.");
+        return; // Exit if essential elements aren't present
+    }
+
+    // Function to fetch results via AJAX
+    const fetchResults = () => {
+        clearTimeout(debounceTimer); // Clear previous timer
+        loadingIndicator.style.display = 'block'; // Show loading
+        errorContainer.innerHTML = ''; // Clear previous errors
+        resultsContainer.innerHTML = ''; // Clear previous results
+
+        const formData = new FormData(searchForm);
+        const params = new URLSearchParams(formData).toString();
+        let searchUrl = searchForm.action;
+        // Check if action URL already contains a query string
+        if (searchUrl.includes('?')) {
+            searchUrl += '&ajax=1'; // Append if other params exist
+        } else {
+            searchUrl += '?ajax=1'; // Start query string if none exist
+        }
+
+        // Construct the final URL: base URL (with ?ajax=1 or &ajax=1 already) + & + other params
+        // Ensure 'params' is not empty before adding '&'
+        const finalUrl = params ? (searchUrl + '&' + params) : searchUrl;
+
+        fetch(finalUrl, { // <-- FIX HERE: Use the correctly constructed finalUrl
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest' // Identify as AJAX request
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.text(); // Expecting HTML response
+        })
+        .then(html => {
+            resultsContainer.innerHTML = html;
+        })
+        .catch(error => {
+            console.error('AJAX Search Error:', error);
+            errorContainer.innerHTML = `<div class="alert alert-danger">Error loading search results: ${error.message}. Please try again later.</div>`;
+        })
+        .finally(() => {
+            loadingIndicator.style.display = 'none'; // Hide loading
+        });
+    };
+
+    // Debounce function to limit AJAX calls
+    const debounceFetch = () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(fetchResults, 500); // Wait 500ms after last change
+    };
+
+    // Attach event listeners to form fields
+    searchForm.querySelectorAll('input, select').forEach(input => {
+        // Use 'input' for text fields, 'change' for selects/dates/checkboxes
+        const eventType = (input.type === 'text' || input.type === 'number') ? 'input' : 'change';
+        input.addEventListener(eventType, debounceFetch);
+    });
+
+    // Prevent default form submission (optional, could allow normal submit as fallback)
+    searchForm.addEventListener('submit', event => {
+        event.preventDefault(); // Prevent full page reload
+        fetchResults(); // Fetch immediately on explicit submit
+    });
+
+    // Initial fetch on page load if parameters are present (e.g., coming from index.php)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.toString().length > 0) { // Check if there are any GET params
+        fetchResults();
+    }
+}
 
 /**
  * Initialize date validation for booking forms

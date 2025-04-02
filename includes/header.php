@@ -31,7 +31,7 @@ function isActive($path) {
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="/eHotels/css/styles.css">
 </head>
 <body>
     <!-- Navigation -->
@@ -66,7 +66,9 @@ function isActive($path) {
                                 <li><a class="dropdown-item <?= isActive('employee/check_in.php') ?>" href="employee/check_in.php">Check-in Guests</a></li>
                                 <li><a class="dropdown-item <?= isActive('employee/direct_rental.php') ?>" href="employee/direct_rental.php">Direct Rental</a></li>
                                 <li><a class="dropdown-item <?= isActive('employee/manage_customers.php') ?>" href="employee/manage_customers.php">Manage Customers</a></li>
-                                <li><a class="dropdown-item <?= isActive('employee/manage_rooms.php') ?>" href="employee/manage_rooms.php">Manage Rooms</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/manage_employees.php') ?>" href="employee/manage_employees.php">Manage Employees</a></li>
+                                <li><a class="dropdown-item <?= isActive('hotel_chain/manage_chains.php') ?>" href="hotel_chain/manage_chains.php">Manage Hotel Chains</a></li>
+                                <li><a class="dropdown-item <?= isActive('hotel/manage_hotels.php') ?>" href="hotel/manage_hotels.php">Manage Hotels</a></li>
                                 <li><a class="dropdown-item <?= isActive('employee/reports.php') ?>" href="employee/reports.php">View Reports</a></li>
                             </ul>
                         </li>
@@ -90,6 +92,10 @@ function isActive($path) {
                         </li>
                         <li class="nav-item">
                             <a class="nav-link <?= isActive('register.php') ?>" href="register.php">Register</a>
+                        </li>
+                        <!-- Demo Link - Add First Employee -->
+                        <li class="nav-item">
+                             <a class="nav-link <?= isActive('employee/add_employee.php') ?>" href="employee/add_employee.php" style="color: yellow; font-weight: bold;">Setup Employee (Demo)</a>
                         </li>
                     <?php endif; ?>
                 </ul>
