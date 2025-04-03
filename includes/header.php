@@ -90,6 +90,7 @@ function isActive($path) {
                         <li class="nav-item">
                             <a class="nav-link <?= isActive('login.php') ?>" href="login.php">Log In</a>
                         </li>
+
                         <li class="nav-item">
                             <a class="nav-link <?= isActive('register.php') ?>" href="register.php">Register</a>
                         </li>
@@ -124,4 +125,5 @@ function isActive($path) {
         <?php endif; ?>
     </div>
 </body>
+</html> 
 </html> 

@@ -100,31 +100,34 @@ try {
         exit;
     }
 
-    // 5. Insert into booking table first
-    // Assuming booking table doesn't store price, adjust if needed.
+    // 5. Generate unique Booking ID
+    $booking_id = uniqid('book_', true); // Generate unique ID in PHP
+
+    // 6. Insert into booking table first
     $insert_booking_sql = "
-        INSERT INTO booking (Customer_ID, Start_Date, End_Date, Creation_Date) 
-        VALUES (?, ?, ?, CURDATE()) -- Assuming Customer_ID is the SSN
+        INSERT INTO booking (Booking_ID, Customer_ID, Start_Date, End_Date, Creation_Date) 
+        VALUES (?, ?, ?, ?, CURDATE()) -- Insert the generated Booking_ID
     ";
     $insert_booking_stmt = $conn->prepare($insert_booking_sql);
     
     $booking_result = $insert_booking_stmt->execute([
+        $booking_id, // Use generated ID
         $customer_ssn,
         $start_date,
         $end_date
     ]);
 
     if ($booking_result) {
-        $booking_id = $conn->lastInsertId(); // Get the ID of the new booking
+        // $booking_id = $conn->lastInsertId(); // No longer needed, we generated it
 
-        // 6. Insert into reserved_by table to link booking to room
+        // 7. Insert into reserved_by table to link booking to room
         $insert_reserved_sql = "
             INSERT INTO reserved_by (Booking_ID, Hotel_Address, Room_Num)
             VALUES (?, ?, ?)
         ";
         $insert_reserved_stmt = $conn->prepare($insert_reserved_sql);
         $reserved_result = $insert_reserved_stmt->execute([
-            $booking_id,
+            $booking_id, // Use the SAME generated ID
             $hotel_address,
             $room_number // Corrected Room_Num based on search.php
         ]);

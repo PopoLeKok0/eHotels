@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once '../config/database.php';
-require_once '../includes/header.php'; // Assuming header includes necessary CSS/JS
+require_once '../includes/header.php'; 
 
 // Check if user is logged in and potentially has a specific role (e.g., admin/employee)
 // For now, just check login, adjust role check as needed later

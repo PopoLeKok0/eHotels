@@ -84,19 +84,34 @@
                         ]);
                         $loginRedirect = 'login.php?redirect=' . urlencode("search.php?" . http_build_query($_GET)); // Preserve current filters on login
                         
-                        if ($loggedIn && $isCustomer): ?>
-                            <a href="booking.php?<?= $bookingParams ?>" class="btn btn-primary w-100">
-                               <i class="fas fa-calendar-check me-1"></i> Book Now
-                            </a>
+                        if ($loggedIn && $isCustomer && $nights > 0): ?>
+                            <!-- Correct Booking Form -->
+                            <form action="process_booking.php" method="POST" class="d-grid"> 
+                                <input type="hidden" name="hotel_address" value="<?= htmlspecialchars($room['Hotel_Address']) ?>">
+                                <input type="hidden" name="room_number" value="<?= htmlspecialchars($room['Room_Num']) ?>">
+                                <input type="hidden" name="chain_name" value="<?= htmlspecialchars($room['Chain_Name']) ?>">
+                                <input type="hidden" name="start_date" value="<?= htmlspecialchars($start_date) ?>">
+                                <input type="hidden" name="end_date" value="<?= htmlspecialchars($end_date) ?>">
+                                <input type="hidden" name="price_per_night" value="<?= htmlspecialchars($room['Price']) ?>">
+                                <input type="hidden" name="total_price" value="<?= number_format($room['Price'] * $nights, 2) ?>">
+                                <input type="hidden" name="nights" value="<?= $nights ?>">
+                                <button type="submit" class="btn btn-primary">
+                                   <i class="fas fa-calendar-check me-1"></i> Book Now
+                                </button>
+                            </form>
                         <?php elseif ($loggedIn && $isEmployee): ?>
-                            <a href="employee/direct_rental.php?<?= $bookingParams ?>" class="btn btn-success w-100 disabled" title="Employees rent via Employee Portal">
+                            <a href="employee/direct_rental.php?hotel_addr=<?= urlencode($room['Hotel_Address']) ?>&room_num=<?= $room['Room_Num'] ?>&start_date=<?= urlencode($start_date) ?>&end_date=<?= urlencode($end_date) ?>" class="btn btn-success w-100 disabled" title="Employees rent via Employee Portal">
                                <i class="fas fa-key me-1"></i> Book (Employee)
                             </a>
                              <small class="d-block text-muted mt-1">Use Employee Portal for rentals.</small>
-                        <?php else: ?>
+                        <?php elseif (!$loggedIn && $nights > 0): // Corrected condition for login link ?>
                             <a href="<?= $loginRedirect ?>" class="btn btn-secondary w-100">
                                <i class="fas fa-sign-in-alt me-1"></i> Login to Book
                             </a>
+                        <?php elseif ($nights <= 0):
+                            // Optional: Show a message if dates are invalid even for logged-in users
+                        ?>
+                             <p class="text-danger text-center mt-2"><small>Select valid dates.</small></p>
                         <?php endif; ?>
                     </div>
                 </div>
