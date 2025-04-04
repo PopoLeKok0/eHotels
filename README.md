@@ -78,8 +78,8 @@ A web-based hotel booking system based on Deliverable 1 by Mouad Ben lahbib (300
     *   Example: If you placed the folder as `eHotels` in `htdocs`, the URL will likely be `http://localhost/eHotels/` or `http://127.0.0.1/eHotels/`.
 
 6.  **Login Credentials (from population script):**
-    *   **Customer:** Use the registration page to create a customer account. Example pre-populated customer (if needed, check `database_population.sql`): `customer1` / `password123` (Password is hashed, use login form).
-    *   **Employee:** Example pre-populated employee (check `database_population.sql`): `emp101` / `password123` (Password is hashed, use login form).
+    *   **Customer:** Please use the registration page to create a customer account. 
+    *   **Employee:** Please use the registration page to create an employee account. 
 
 ## Directory Structure (Essential for Submission)
 
