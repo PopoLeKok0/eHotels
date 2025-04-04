@@ -50,7 +50,3 @@ BEGIN
     END IF;
 END; //
 DELIMITER ;
-
--- Note: An additional trigger could be added for UPDATE on Hotel 
--- if changing Chain_Name or Manager_SSN requires updates/checks, 
--- but the INSERT/DELETE count and manager delete check cover core scenarios. 

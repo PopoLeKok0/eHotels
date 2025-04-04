@@ -51,6 +51,3 @@ FROM Hotel h
 JOIN Room r ON h.Hotel_Address = r.Hotel_Address
 GROUP BY h.Hotel_Address, h.Chain_Name, h.Area
 ORDER BY h.Chain_Name, h.Area, h.Hotel_Address;
-
--- Placeholder for the second view (we'll add it later)
--- CREATE OR REPLACE VIEW aggregated_hotel_capacity AS ... 

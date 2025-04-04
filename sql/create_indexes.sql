@@ -1,8 +1,3 @@
--- Requirement 2e: Database Indexes
--- Implement at least 3 indexes and justify why you have chosen these indexes.
-
--- Active: 1711065012108@@127.0.0.1@3306@ehotels
-
 -- Index 1: On Room(Hotel_Address, Availability, Capacity, Price)
 -- Justification: This index is designed to optimize the main room search functionality.
 -- It covers filtering by Hotel (via Hotel_Address), basic availability,
