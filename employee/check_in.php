@@ -104,6 +104,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_check_in'])) 
                 throw new Exception("Booking not found or already processed.");
             }
             
+            // --- ADDED DATE VALIDATION ---
+            $booking_start_date = $booking_data['Start_Date'];
+            $booking_end_date = $booking_data['End_Date'];
+            if (strtotime($booking_end_date) <= strtotime($booking_start_date)) {
+                throw new Exception("Check-in failed: Booking End Date (" . htmlspecialchars($booking_end_date) . ") must be after Start Date (" . htmlspecialchars($booking_start_date) . ").");
+            }
+            // --- END ADDED DATE VALIDATION ---
+
             // Optional: Add check to ensure start date is today or in the past?
             $startDateObj = new DateTime($booking_data['Start_Date']);
             $today = new DateTime('today');
@@ -117,16 +125,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_check_in'])) 
             $renting_id = uniqid('rent_', true); // Generate unique ID like rent_xxxxxxxxxxxx.xxxxxx
 
             // 3. Insert into Renting table using the generated ID
-            $check_in_date = date('Y-m-d'); 
+            $check_in_date = date('Y-m-d'); // Actual check-in date is today
             $stmt_rent = $db->prepare("
                 INSERT INTO Renting (Renting_ID, Customer_ID, Start_Date, End_Date, Payment_Amount) 
                 VALUES (?, ?, ?, ?, ?) 
             ");
             $renting_inserted = $stmt_rent->execute([
-                $renting_id, // Use generated ID
+                $renting_id,                   // Use generated ID
                 $booking_data['Customer_ID'],
-                $check_in_date, 
-                $booking_data['End_Date'], 
+                $booking_data['Start_Date'],   // Use ORIGINAL booking start date for record
+                $booking_data['End_Date'],     // Use ORIGINAL booking end date
                 $payment_amount
             ]);
 

@@ -56,6 +56,8 @@ CREATE TABLE Hotel (
     Manager_SSN CHAR(9) NOT NULL,
     Num_Rooms INTEGER NOT NULL DEFAULT 0,
     Area VARCHAR(50) NOT NULL, -- Added for area-based searches
+    Phone_Number VARCHAR(20) NULL, -- Added Phone_Number column
+    Email_Address VARCHAR(100),
     FOREIGN KEY (Chain_Name) REFERENCES Hotel_Chain(Chain_Name) ON DELETE RESTRICT,
     FOREIGN KEY (Manager_SSN) REFERENCES Employee(SSN) ON DELETE RESTRICT,
     CONSTRAINT check_star_rating CHECK (Star_Rating BETWEEN 1 AND 5),

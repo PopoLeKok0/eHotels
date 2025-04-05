@@ -16,8 +16,12 @@ $isCustomer = $loggedIn && isset($_SESSION['role']) && $_SESSION['role'] === 'cu
 
 // Function to check if the current page matches a given path
 function isActive($path) {
-    $currentPage = basename($_SERVER['PHP_SELF']);
-    return $currentPage === $path ? 'active' : '';
+    // Construct the expected request URI base path, ensuring it starts with /eHotels/
+    $expectedUri = '/eHotels/' . ltrim($path, '/');
+    // Get the current request URI path part (without query string)
+    $currentUriPath = strtok($_SERVER['REQUEST_URI'], '?');
+    // Check if the current URI path exactly matches the expected path
+    return $currentUriPath === $expectedUri ? 'active' : '';
 }
 ?>
 <!DOCTYPE html>
@@ -37,7 +41,7 @@ function isActive($path) {
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
-            <a class="navbar-brand" href="index.php">
+            <a class="navbar-brand" href="/eHotels/index.php">
                 <i class="fas fa-hotel me-2"></i>e-Hotels
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
@@ -46,14 +50,14 @@ function isActive($path) {
             <div class="collapse navbar-collapse" id="navbarMain">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link <?= isActive('index.php') ?>" href="index.php">Home</a>
+                        <a class="nav-link <?= isActive('index.php') ?>" href="/eHotels/index.php">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= isActive('search.php') ?>" href="search.php">Search Rooms</a>
+                        <a class="nav-link <?= isActive('search.php') ?>" href="/eHotels/search.php">Search Rooms</a>
                     </li>
                     <?php if ($isCustomer): ?>
                         <li class="nav-item">
-                            <a class="nav-link <?= isActive('my_bookings.php') ?>" href="my_bookings.php">My Bookings</a>
+                            <a class="nav-link <?= isActive('my_bookings.php') ?>" href="/eHotels/my_bookings.php">My Bookings</a>
                         </li>
                     <?php endif; ?>
                     <?php if ($isEmployee): ?>
@@ -62,14 +66,14 @@ function isActive($path) {
                                 Employee Portal
                             </a>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item <?= isActive('employee/index.php') ?>" href="employee/index.php">Dashboard</a></li>
-                                <li><a class="dropdown-item <?= isActive('employee/check_in.php') ?>" href="employee/check_in.php">Check-in Guests</a></li>
-                                <li><a class="dropdown-item <?= isActive('employee/direct_rental.php') ?>" href="employee/direct_rental.php">Direct Rental</a></li>
-                                <li><a class="dropdown-item <?= isActive('employee/manage_customers.php') ?>" href="employee/manage_customers.php">Manage Customers</a></li>
-                                <li><a class="dropdown-item <?= isActive('employee/manage_employees.php') ?>" href="employee/manage_employees.php">Manage Employees</a></li>
-                                <li><a class="dropdown-item <?= isActive('hotel_chain/manage_chains.php') ?>" href="hotel_chain/manage_chains.php">Manage Hotel Chains</a></li>
-                                <li><a class="dropdown-item <?= isActive('hotel/manage_hotels.php') ?>" href="hotel/manage_hotels.php">Manage Hotels</a></li>
-                                <li><a class="dropdown-item <?= isActive('employee/reports.php') ?>" href="employee/reports.php">View Reports</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/index.php') ?>" href="/eHotels/employee/index.php">Dashboard</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/check_in.php') ?>" href="/eHotels/employee/check_in.php">Check-in Guests</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/direct_rental.php') ?>" href="/eHotels/employee/direct_rental.php">Direct Rental</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/manage_customers.php') ?>" href="/eHotels/employee/manage_customers.php">Manage Customers</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/manage_employees.php') ?>" href="/eHotels/employee/manage_employees.php">Manage Employees</a></li>
+                                <li><a class="dropdown-item <?= isActive('hotel_chain/manage_chains.php') ?>" href="/eHotels/hotel_chain/manage_chains.php">Manage Hotel Chains</a></li>
+                                <li><a class="dropdown-item <?= isActive('hotel/manage_hotels.php') ?>" href="/eHotels/hotel/manage_hotels.php">Manage Hotels</a></li>
+                                <li><a class="dropdown-item <?= isActive('employee/reports.php') ?>" href="/eHotels/employee/reports.php">View Reports</a></li>
                             </ul>
                         </li>
                     <?php endif; ?>
@@ -81,22 +85,22 @@ function isActive($path) {
                                 <i class="fas fa-user me-1"></i> <?= htmlspecialchars($_SESSION['username'] ?? 'User') ?>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="profile.php">My Profile</a></li>
+                                <li><a class="dropdown-item" href="/eHotels/profile.php">My Profile</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="logout.php">Log Out</a></li>
+                                <li><a class="dropdown-item" href="/eHotels/logout.php">Log Out</a></li>
                             </ul>
                         </li>
                     <?php else: ?>
                         <li class="nav-item">
-                            <a class="nav-link <?= isActive('login.php') ?>" href="login.php">Log In</a>
+                            <a class="nav-link <?= isActive('login.php') ?>" href="/eHotels/login.php">Log In</a>
                         </li>
 
                         <li class="nav-item">
-                            <a class="nav-link <?= isActive('register.php') ?>" href="register.php">Register</a>
+                            <a class="nav-link <?= isActive('register.php') ?>" href="/eHotels/register.php">Register</a>
                         </li>
                         <!-- Demo Link - Add First Employee -->
                         <li class="nav-item">
-                             <a class="nav-link <?= isActive('employee/add_employee.php') ?>" href="employee/add_employee.php" style="color: yellow; font-weight: bold;">Setup Employee (Demo)</a>
+                             <a class="nav-link <?= isActive('employee/add_employee.php') ?>" href="/eHotels/employee/add_employee.php" style="color: yellow; font-weight: bold;">Setup Employee (Demo)</a>
                         </li>
                     <?php endif; ?>
                 </ul>
@@ -125,5 +129,4 @@ function isActive($path) {
         <?php endif; ?>
     </div>
 </body>
-</html> 
 </html> 
