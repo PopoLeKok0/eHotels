@@ -107,15 +107,11 @@ A web-based hotel booking system based on Deliverable 1 by Mouad Ben lahbib (300
 - Error messages should appear at the top of the page if issues occur.
 - Database errors are logged to the PHP error log.
 
-## Credits
-
-This application is based on a database design project by Mouad Ben lahbib (300259705).
-
 ## Contributors
 - Mouad Ben lahbib (300259705)
 
 ## Disclaimer
-This application is based on a database design project by Mouad Ben lahbib (300259705).
+This application is based on a database design project by Mouad.
 
 ## License 
 All Rights Reserved.
